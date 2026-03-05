@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ProgressProvider } from "@/components/progress-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 
@@ -31,13 +32,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white dark:bg-zinc-900`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <header className="flex items-center justify-between px-6 py-4 border-b">
-            <Link href="/" className="font-semibold text-lg">
-              fp-ts Course
-            </Link>
-            <ThemeToggle />
-          </header>
-          {children}
+          <ProgressProvider>
+            <header className="flex items-center justify-between px-6 py-4 border-b">
+              <Link href="/" className="font-semibold text-lg">
+                fp-ts Course
+              </Link>
+              <ThemeToggle />
+            </header>
+            {children}
+          </ProgressProvider>
         </ThemeProvider>
       </body>
     </html>
