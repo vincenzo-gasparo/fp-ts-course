@@ -26,6 +26,8 @@ quiz:
     explanation: "TE.chain implements the railway model — if the current TaskEither is Left (failure track), subsequent TE.chain steps are skipped entirely. The Left value threads through unchanged until you handle it with TE.fold or TE.getOrElse. This is what makes error handling automatic in a pipeline."
 ---
 
+Most real async operations can fail: an API might be down, a database query might return nothing, a network request might time out. `TaskEither` combines the two ideas you have already seen: it represents async work (`Task`) that might succeed or fail (`Either`). Instead of writing try/catch blocks around every await, you describe the entire operation — including its failure cases — as a single composable pipeline. Errors flow through the pipeline as data, not exceptions.
+
 ## Introduction
 
 If you asked an experienced fp-ts developer "what is the single most important type in the library for real production code?", the overwhelming answer would be `TaskEither`. It is the combination of everything you have learned in Days 3 and 4: the laziness and async composition of `Task`, plus the typed error handling of `Either`.

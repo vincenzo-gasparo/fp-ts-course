@@ -26,6 +26,8 @@ quiz:
     explanation: "Reader has a learning curve and adds abstraction. If you have 1-2 dependencies, passing them as plain function arguments is simpler and more readable. Reader pays off when many functions share the same environment."
 ---
 
+Imagine you have a function that needs access to a logger, or a config object, or a database connection — but you do not want to hard-code those dependencies or pass them through every function call. Dependency injection is the solution, and `Reader` is the fp-ts way to do it. A `Reader<Environment, Result>` is a function that reads from an environment to produce a result. `ReaderIO` extends this to synchronous side effects: work that needs an environment and produces an effect.
+
 ## Introduction
 
 As a program grows, functions start needing more dependencies: a logger, a config object, a database client, a clock. The naive solution is to pass them as additional arguments — but this creates a proliferation of parameters that every function in the call chain must thread through. The other common solution is globals or singletons, but these hide dependencies and make testing hard.

@@ -26,6 +26,8 @@ quiz:
     explanation: "NonEmptyArray is the right choice only when an empty array is a genuinely impossible or invalid state for your domain. If an event log could legitimately have zero entries, use ReadonlyArray. Adding NonEmptyArray where the empty case is valid just forces callers to do unnecessary conversions."
 ---
 
+Some operations only make sense on lists that are guaranteed to have at least one element: taking the maximum, computing the average, getting the first item. With a regular array, you have to handle the empty case even when logically your data can never be empty. `NonEmptyArray` encodes that guarantee in the type — if you have a `NonEmptyArray`, the TypeScript compiler knows it has at least one element and will stop you from writing impossible empty-array checks.
+
 ## Introduction
 
 Every TypeScript developer has written this bug at least once:

@@ -26,6 +26,8 @@ quiz:
     explanation: "sequenceS(O.Apply)({ a: optionA, b: optionB }) returns Some({ a, b }) only if both optionA and optionB are Some. If either is None, the result is None. This is parallel Option combination — all fields must be present for the record to be constructed."
 ---
 
+You know how to apply a single transformation to a value inside a box (that is `map`). But what if the transformation itself is inside a box? Or what if you want to combine two independent boxed values — say, two separate API results — into one? `Apply` and `Applicative` solve this. Think of it as running several independent operations in parallel and combining their results, as opposed to chaining operations where each one depends on the previous.
+
 ## Introduction
 
 On Day 3 you learned that `Either`'s `chain` short-circuits on the first error. On Day 5 you learned that `TaskEither`'s `chain` sequences operations one at a time. Both of these are the right choice when operations are **dependent** — when step 2 needs the output of step 1. But what about **independent** operations?

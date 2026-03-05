@@ -26,6 +26,8 @@ quiz:
     explanation: "R.lookup returns an Option<A> — it returns O.none if the key is absent instead of returning undefined and risking downstream errors."
 ---
 
+A `Record` is a dictionary — an object where every key maps to a value of the same type. You use them constantly in applications: a map of user IDs to user objects, a cache of API results keyed by URL, a collection of feature flags. fp-ts provides a set of tools for working with these dictionaries that are pipe-friendly and safe: they handle missing keys gracefully, let you transform all values at once, and combine two records cleanly.
+
 ## Introduction
 
 Every TypeScript codebase has string-keyed objects: configuration maps, caches, API response dictionaries, lookup tables. The usual approach is direct property access — `record[key]` — but this can silently return `undefined` when a key is missing, and mutation (`record[key] = newValue`) makes state harder to track.

@@ -26,6 +26,8 @@ quiz:
     explanation: "E.map only transforms the Right value. When the Either is Left, map is a no-op — the Left error value is threaded through unchanged. This is the 'railway' model: errors stay on the error track, successes stay on the success track."
 ---
 
+When an operation can succeed or fail — parsing user input, reading a file, calling an API — traditional code handles failure with exceptions: the function runs, something goes wrong, and control jumps somewhere else entirely. `Either` models success and failure as two branches of the same type: a `Left` carrying the error, or a `Right` carrying the result. Nothing is thrown, nothing is caught — the failure is just data you carry forward and handle when you choose.
+
 ## Introduction
 
 `Either<E, A>` is the logical evolution of `Option<A>`. Where Option answers "is a value present?", Either answers "did this computation succeed, and if not, why?". Every real application needs to communicate errors — parse failures, validation rejections, not-found results, permission denials — and Either gives you a type-safe, composable way to do that.

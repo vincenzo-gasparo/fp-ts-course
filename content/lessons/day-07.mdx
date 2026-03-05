@@ -26,6 +26,8 @@ quiz:
     explanation: "A.filter(predicate) retains elements where predicate returns true. A.filterMap(f) maps each element through f (which returns Option<B>) and collects only the Some<B> values — filtering and transforming in one pass. This eliminates the common pattern of .filter().map() where map might return undefined."
 ---
 
+Arrays are everywhere in application code — lists of users, collections of results, sets of tags. fp-ts provides a set of array utilities that follow the same patterns as everything else you have learned: pure functions, pipe-friendly design, and no mutation. If you have used `Array.map` and `Array.filter` before, most of this will feel familiar. The new parts are the fp-ts-specific combinators that handle the tricky cases — filtering with functions that might return nothing, finding the first match, or safely accessing elements that might not exist.
+
 ## Introduction
 
 JavaScript's built-in array methods — `map`, `filter`, `reduce`, `find` — are genuinely good. They are expressive, they are familiar, and for simple cases they are the right tool. So why does fp-ts provide an entire `ReadonlyArray` module with what looks like duplicate functionality?

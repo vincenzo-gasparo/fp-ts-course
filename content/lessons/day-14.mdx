@@ -26,6 +26,8 @@ quiz:
     explanation: "Eq.fromEquals takes a (a: A, b: A) => boolean function and returns an Eq<A> instance with an 'equals' method. This lets you define structural equality for any type."
 ---
 
+How do you sort a list of users by last name, then by first name, then by age? How do you check if two complex objects are equal by value rather than by reference? How do you combine a list of optional numbers, skipping the empty ones? These are questions about comparison, equality, and combination — operations that appear in almost every application. This lesson covers the fp-ts type classes that model these operations in a principled, composable way.
+
 ## Introduction
 
 Every time fp-ts's `Array.sort`, `Option.getEq`, or `Map` operations work correctly, there is a typeclass instance behind the scenes. Understanding the four core typeclasses — `Eq`, `Ord`, `Semigroup`, and `Monoid` — unlocks the full library.

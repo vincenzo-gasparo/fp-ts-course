@@ -26,6 +26,8 @@ quiz:
     explanation: "If you know the JSON is well-formed (e.g. from a compile-time source) and already handle errors, plain JSON.parse is simpler. Json.parse shines when composing parse + decode in a pipeline."
 ---
 
+Every application that talks to an API or reads from storage has to parse JSON — and JSON parsing can always fail. A JSON string might be malformed, or it might be valid JSON but not the shape your code expects. fp-ts provides utilities for parsing JSON that return an `Either` instead of throwing an exception, and a pattern for validating that parsed data matches the structure you expect. This makes the most error-prone boundary in most applications — external data coming in — completely safe.
+
 ## Introduction
 
 `JSON.parse` is one of the most common sources of uncaught runtime exceptions in TypeScript code. Call it with a malformed string and it throws. The traditional response is a try/catch wrapper — but that produces `any`-typed values, breaks type inference, and makes it easy to forget error handling entirely.

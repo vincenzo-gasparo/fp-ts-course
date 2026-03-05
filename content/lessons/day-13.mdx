@@ -26,6 +26,8 @@ quiz:
     explanation: "ReaderTaskEither earns its complexity when you need the Reader layer — i.e., when many functions share a common environment that you want to inject once at the edge. If your function only needs 1-2 deps, passing them as arguments and using TaskEither is simpler."
 ---
 
+Production service layers need three things at once: access to external services like databases or HTTP clients (dependency injection), the ability to do async work, and robust error handling. `ReaderTaskEither` is fp-ts's answer to all three. It is the most powerful type in the library, and the one most commonly used in real-world backend code. Once you see how it composes, you will recognize it as the natural home for any serious business logic.
+
 ## Introduction
 
 By Day 12 you have seen the three main concerns that arise in real-world programs:

@@ -26,6 +26,8 @@ quiz:
     explanation: "A Task is just a function. To execute it, call it: task(). This returns a Promise that you can then await or chain with .then(). The explicit invocation is intentional — it makes it clear that you are the one deciding when the effect runs."
 ---
 
+Every async operation in JavaScript returns a Promise — a value that represents work that will complete in the future. Promises are fine, but they fire the moment you create them and their error handling is a mix of `.catch()` chains and try/catch blocks. `Task` is a lazy Promise: it is a description of async work that has not started yet. You build up the pipeline first, then run it once at the end — giving you full control over when side effects happen.
+
 ## Introduction
 
 Promises are the standard way to handle async code in TypeScript, and they work well for one-off operations. But they have a fundamental property that makes them awkward for functional composition: **Promises are eager**. When you create a `new Promise(...)` or call an `async` function, the async operation starts immediately. You cannot pass a Promise around as a value without the work already having started.

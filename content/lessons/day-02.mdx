@@ -26,6 +26,8 @@ quiz:
     explanation: "Option models presence vs absence, but provides no information about the cause of absence. When callers need to know WHY something is missing (e.g., 'not found' vs 'insufficient permissions' vs 'parse error'), use Either<ErrorType, A> — the Left carries the reason."
 ---
 
+Every application has values that might or might not exist: a user's middle name, the result of a database lookup, a config value that was never set. In plain JavaScript, these are represented as `null` or `undefined` — silent time bombs that cause crashes the moment you forget to check for them. `Option` is a box that either contains a value or is explicitly empty. The key insight is that the box itself is always there, so you never accidentally try to open nothing.
+
 ## Introduction
 
 In TypeScript, `null` and `undefined` are the source of a disproportionate number of production bugs. The infamous null pointer exception — Tony Hoare's "billion-dollar mistake" — manifests in TypeScript as `Cannot read property 'x' of null` or `Cannot read property 'y' of undefined`. TypeScript's `strictNullChecks` flag forces you to acknowledge the possibility of null, but it does not give you tools to work with nullable values elegantly.

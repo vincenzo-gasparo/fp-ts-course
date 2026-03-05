@@ -26,6 +26,8 @@ quiz:
     explanation: "IO<A> is for synchronous effects that always succeed (like reading Date.now() or Math.random()). Use IOEither when the operation can fail — like localStorage.getItem followed by JSON.parse."
 ---
 
+Some operations are synchronous but can still fail: reading from `localStorage`, parsing a config file, accessing environment variables. These are not async like a network call, but they are not pure functions either — they touch the outside world and can produce errors. `IOEither` models these operations as a typed value that, when run, either produces an error (`Left`) or a result (`Right`). It is the synchronous sibling of `TaskEither`.
+
 ## Introduction
 
 You have seen TaskEither for async operations that can fail. But not every fallible operation is asynchronous. Reading from `localStorage`, calling a synchronous native API, or parsing data can all fail — without involving a `Promise`.

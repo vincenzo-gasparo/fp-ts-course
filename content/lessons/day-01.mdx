@@ -26,6 +26,8 @@ quiz:
     explanation: "Nesting pipe inside pipe creates unnecessary cognitive overhead. If you find yourself writing pipe(x, a => pipe(a, f, g), h), flatten it: pipe(x, f, g, h). The whole point of pipe is a flat, readable sequence."
 ---
 
+Imagine you have a piece of data — say, a user's name — and you need to transform it through a series of steps: trim the whitespace, convert to lowercase, then format it for display. In most code, you either nest these calls inside each other (which reads backwards) or create a bunch of intermediate variables you only use once. `pipe` and `flow` give you a clean, left-to-right way to write transformation sequences that read like plain instructions. These two utilities appear in virtually every line of fp-ts code, so understanding them deeply is your first priority.
+
 ## Introduction
 
 Every fp-ts codebase is built on two utilities from the `fp-ts/function` module: `pipe` and `flow`. If you have worked with fp-ts for more than five minutes, you have already seen `pipe`. Understanding these two functions deeply — not just knowing the syntax, but grasping when and why to reach for each — is the foundation everything else in this course builds on.
