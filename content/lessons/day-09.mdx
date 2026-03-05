@@ -1,35 +1,248 @@
 ---
-title: "Monad: Sequential Effects and flatMap"
+title: "Record: Functional Operations on String-Keyed Objects"
 day: 9
-description: "Master the Monad pattern to sequence effectful computations where each step depends on the result of the previous — the functional alternative to async/await."
+description: "Use fp-ts Record to transform, filter, and traverse string-keyed objects without mutation — the functional alternative to raw property access."
+quiz:
+  - question: "What does R.map do to a Record<string, A>?"
+    options:
+      - "It mutates each value in place"
+      - "It returns a new Record with each value transformed by the mapping function"
+      - "It converts the record to an array"
+    correct: 1
+    explanation: "R.map returns a new Record<string, B> where every value has been transformed — the original record is not mutated."
+  - question: "When should you prefer a plain Map over fp-ts Record?"
+    options:
+      - "When you want immutability"
+      - "When you need non-string keys (e.g. number or object keys)"
+      - "When you need to use pipe"
+    correct: 1
+    explanation: "Record<string, A> only supports string keys. If you need numeric or object keys, use JavaScript's built-in Map instead."
+  - question: "Which function would you use to find a value by key in a Record without risking a runtime error?"
+    options:
+      - "R.lookup"
+      - "record[key]"
+      - "R.filter"
+    correct: 0
+    explanation: "R.lookup returns an Option<A> — it returns O.none if the key is absent instead of returning undefined and risking downstream errors."
 ---
 
-## What Makes Something a Monad?
+## Introduction
 
-A Monad extends Functor with `chain` (also called `flatMap` or `bind`). It lets you sequence computations where the next step depends on the result of the current step.
+Every TypeScript codebase has string-keyed objects: configuration maps, caches, API response dictionaries, lookup tables. The usual approach is direct property access — `record[key]` — but this can silently return `undefined` when a key is missing, and mutation (`record[key] = newValue`) makes state harder to track.
 
-## Sequential async with Monad
+fp-ts `Record` gives you a purely functional API for the most common operations on `Record<string, A>`: mapping, filtering, reducing, looking up values safely, and combining records. Every function returns a new record; the original is never mutated. Because it fits into the `pipe` model, you can compose transformations in a single readable pipeline instead of scattering `Object.entries`, `.map`, and `Object.fromEntries` calls across your code.
+
+## Core API
+
+Import the module and its common companions:
 
 ```typescript
 import { pipe } from 'fp-ts/function'
-import * as TE from 'fp-ts/TaskEither'
-
-type User = { id: number; name: string; teamId: number }
-type Team = { id: number; name: string }
-
-const getUser = (id: number): TE.TaskEither<Error, User> =>
-  TE.right({ id, name: 'Alice', teamId: 7 })
-
-const getTeam = (teamId: number): TE.TaskEither<Error, Team> =>
-  TE.right({ id: teamId, name: 'Engineering' })
-
-const program = pipe(
-  getUser(1),
-  TE.chain(user => getTeam(user.teamId)),
-  TE.map(team => `Team: ${team.name}`)
-)
-
-program().then(console.log) // "Team: Engineering"
+import * as R from 'fp-ts/Record'
+import * as O from 'fp-ts/Option'
 ```
 
-`chain` threads the success value from one TaskEither into the next, short-circuiting on the first error.
+### R.map — transform every value
+
+The most-used operation: apply a function to every value in the record, producing a new record with the same keys.
+
+```typescript
+const prices: Record<string, number> = {
+  apple: 1.5,
+  banana: 0.75,
+  cherry: 3.0,
+}
+
+const discounted = pipe(
+  prices,
+  R.map(price => price * 0.9) // 10% off every item
+)
+
+// { apple: 1.35, banana: 0.675, cherry: 2.7 }
+```
+
+### R.mapWithIndex — transform with key access
+
+When the transformation depends on the key as well as the value:
+
+```typescript
+const labels = pipe(
+  prices,
+  R.mapWithIndex((key, price) => `${key}: $${price.toFixed(2)}`)
+)
+
+// { apple: 'apple: $1.50', banana: 'banana: $0.75', cherry: 'cherry: $3.00' }
+```
+
+### R.filter — keep matching entries
+
+Returns a new record containing only entries whose value passes the predicate:
+
+```typescript
+const expensive = pipe(
+  prices,
+  R.filter(price => price >= 1.5)
+)
+
+// { apple: 1.5, cherry: 3.0 }
+```
+
+### R.filterWithIndex — filter using key and value
+
+```typescript
+// Keep only entries whose key starts with 'c'
+const cItems = pipe(
+  prices,
+  R.filterWithIndex((key, _value) => key.startsWith('c'))
+)
+
+// { cherry: 3.0 }
+```
+
+### R.lookup — safe key access
+
+Direct property access (`record[key]`) returns `undefined` when the key is absent. `R.lookup` wraps the result in `Option`, forcing you to handle the missing case:
+
+```typescript
+const maybeApple: O.Option<number> = pipe(
+  prices,
+  R.lookup('apple')
+)
+// O.some(1.5)
+
+const maybeDurian: O.Option<number> = pipe(
+  prices,
+  R.lookup('durian')
+)
+// O.none — key does not exist
+```
+
+This composes naturally with the rest of the `Option` API:
+
+```typescript
+import * as O from 'fp-ts/Option'
+
+const appleLabel = pipe(
+  prices,
+  R.lookup('apple'),
+  O.map(p => `$${p.toFixed(2)}`),
+  O.getOrElse(() => 'Not found')
+)
+// '$1.50'
+```
+
+### R.reduce — accumulate a record into a single value
+
+```typescript
+const total = pipe(
+  prices,
+  R.reduce(0, (acc, price) => acc + price)
+)
+// 5.25
+```
+
+### R.union — merge two records (left-biased on collision)
+
+When the same key appears in both records, the value from the first record wins:
+
+```typescript
+import { first } from 'fp-ts/Semigroup'
+
+const defaults: Record<string, number> = { timeout: 5000, retries: 3 }
+const overrides: Record<string, number> = { timeout: 1000, maxBytes: 65536 }
+
+const config = pipe(
+  overrides,
+  R.union(first<number>())(defaults)
+)
+// { timeout: 1000, retries: 3, maxBytes: 65536 }
+// overrides.timeout wins over defaults.timeout
+```
+
+### R.toEntries / R.fromEntries — converting to/from arrays
+
+When you need to interop with code that works on entry arrays:
+
+```typescript
+const entries = R.toEntries(prices)
+// [['apple', 1.5], ['banana', 0.75], ['cherry', 3.0]]
+
+const rebuilt = R.fromEntries(entries)
+// { apple: 1.5, banana: 0.75, cherry: 3.0 }
+```
+
+## When to Use / When NOT to Use
+
+**Use `fp-ts/Record` when:**
+
+- You have a `Record<string, A>` and want to transform all values without mutation
+- You need safe key lookup that forces you to handle the missing case (`R.lookup`)
+- You want to compose multiple record transformations in a single `pipe` pipeline
+- You need to filter, reduce, or merge records in a readable, typed way
+
+**Do NOT use `fp-ts/Record` when:**
+
+- **You need non-string keys.** `Record<string, A>` only works with string keys. If you need numeric keys, symbol keys, or object keys, use JavaScript's built-in `Map<K, V>`.
+- **You are doing a simple one-off property read.** If you just need `obj.someKnownKey` and you know the key exists, direct access is clearer. Reserve `R.lookup` for cases where the key might not exist.
+- **Performance is critical and the record is large.** Functional operations create new objects on every step. For tight loops over very large records, imperative mutation may be more appropriate.
+- **Your team is unfamiliar with fp-ts.** The `pipe(record, R.map(...), R.filter(...))` style reads naturally once you know the library, but can surprise developers who haven't seen it before.
+
+## Real-World Example
+
+Suppose your API returns a list of feature flags as a record, and you need to apply per-environment overrides, then expose only the enabled flags:
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as R from 'fp-ts/Record'
+import * as O from 'fp-ts/Option'
+import { first } from 'fp-ts/Semigroup'
+
+type Flag = { enabled: boolean; rollout: number }
+
+// Raw feature flags from a config service
+const baseFlags: Record<string, Flag> = {
+  newDashboard: { enabled: false, rollout: 0 },
+  betaSearch:   { enabled: true,  rollout: 50 },
+  darkMode:     { enabled: true,  rollout: 100 },
+}
+
+// Environment-specific overrides (staging enables newDashboard)
+const stagingOverrides: Record<string, Flag> = {
+  newDashboard: { enabled: true, rollout: 100 },
+}
+
+// 1. Merge: stagingOverrides values win on collision
+const merged = pipe(
+  stagingOverrides,
+  R.union(first<Flag>())(baseFlags)
+)
+
+// 2. Keep only fully-rolled-out flags
+const fullyRolledOut = pipe(
+  merged,
+  R.filter(flag => flag.enabled && flag.rollout === 100)
+)
+
+// 3. Expose as a set of flag names
+const activeNames = R.toEntries(fullyRolledOut).map(([key]) => key)
+// ['newDashboard', 'darkMode']
+
+// 4. Safe lookup for a specific flag
+const betaRollout = pipe(
+  merged,
+  R.lookup('betaSearch'),
+  O.map(f => f.rollout),
+  O.getOrElse(() => 0)
+)
+// 50
+```
+
+Notice how the pipeline reads like a specification: merge flags, keep enabled+full-rollout entries, extract names. No intermediate variables holding mutated state, no `undefined` checks scattered through the code.
+
+## Key Takeaways
+
+- `R.map`, `R.filter`, and `R.reduce` give you the standard collection operations on records without mutation
+- `R.lookup` replaces unsafe `record[key]` with an `Option`, eliminating silent `undefined` returns
+- Use `R.mapWithIndex` / `R.filterWithIndex` when the transformation depends on the key, not just the value
+- `R.union` merges two records; the first record's values win on key collisions — use a Semigroup to customize merge behavior
+- Reserve `fp-ts/Record` for string-keyed maps; use JavaScript's `Map` when you need non-string keys

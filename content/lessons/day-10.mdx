@@ -1,34 +1,222 @@
 ---
-title: "Array utilities: map, filter, reduce"
+title: "Json: Safe JSON Parsing and Stringification"
 day: 10
-description: "Explore fp-ts Array module utilities that provide a type-class aware, composable alternative to native array methods."
+description: "Use fp-ts Json to wrap JSON.parse and JSON.stringify in Either — making parse failures explicit, typed, and composable instead of thrown exceptions."
+quiz:
+  - question: "What does Json.parse return?"
+    options:
+      - "The parsed value directly, or throws on failure"
+      - "Either<unknown, unknown> — Left on parse error, Right on success"
+      - "Option<unknown> — None if parsing fails"
+    correct: 1
+    explanation: "Json.parse wraps JSON.parse in a try/catch and returns Either<unknown, unknown>. The error channel type is unknown because JSON parse errors can be any thrown value."
+  - question: "Why is the success type of Json.parse 'unknown' rather than a specific type?"
+    options:
+      - "Because fp-ts cannot infer TypeScript types from JSON"
+      - "Because JSON.parse itself returns any — the shape is unknown until you narrow it with a decoder"
+      - "Because Json.parse only works with primitive values"
+    correct: 1
+    explanation: "JSON.parse returns any at runtime. The actual shape is unknown until you apply a type guard or decoder (like io-ts or zod) via E.chain."
+  - question: "When is it appropriate to use plain JSON.parse instead of Json.parse?"
+    options:
+      - "Never — Json.parse is always better"
+      - "When the input is trusted or you already have a surrounding try/catch boundary"
+      - "When working with TypeScript classes"
+    correct: 1
+    explanation: "If you know the JSON is well-formed (e.g. from a compile-time source) and already handle errors, plain JSON.parse is simpler. Json.parse shines when composing parse + decode in a pipeline."
 ---
 
-## fp-ts Array vs Native Arrays
+## Introduction
 
-While JavaScript's native array methods work, fp-ts provides a richer set of array utilities that integrate with the type class hierarchy and work seamlessly in pipelines.
+`JSON.parse` is one of the most common sources of uncaught runtime exceptions in TypeScript code. Call it with a malformed string and it throws. The traditional response is a try/catch wrapper — but that produces `any`-typed values, breaks type inference, and makes it easy to forget error handling entirely.
 
-## Working with fp-ts Array module
+fp-ts `Json` wraps both `JSON.parse` and `JSON.stringify` in `Either`, making failures explicit and composable. The resulting `Either<unknown, unknown>` from `Json.parse` integrates naturally with `E.chain` for type-narrowing decoders, turning a notoriously error-prone operation into a typed pipeline.
+
+The module is small — just two functions — but it solves a very real problem: untrusted string input is everywhere, and throwing exceptions is the wrong abstraction for expected failure modes.
+
+## Core API
 
 ```typescript
 import { pipe } from 'fp-ts/function'
-import * as A from 'fp-ts/Array'
-import * as O from 'fp-ts/Option'
-
-const numbers = [1, 2, 3, 4, 5, 6]
-
-const result = pipe(
-  numbers,
-  A.filter(n => n % 2 === 0),
-  A.map(n => n * n),
-  A.reduce(0, (acc, n) => acc + n)
-)
-
-console.log(result) // 56 (4 + 16 + 36)
-
-// findFirst returns Option, not undefined
-const first = pipe(numbers, A.findFirst(n => n > 3))
-console.log(first) // O.some(4)
+import * as Json from 'fp-ts/Json'
+import * as E from 'fp-ts/Either'
 ```
 
-fp-ts array operations are total functions — they never throw and always return predictable types.
+### Json.parse — safe JSON.parse
+
+```typescript
+const result1 = Json.parse('{"name":"Alice","age":30}')
+// E.right({ name: 'Alice', age: 30 })  — type: Either<unknown, unknown>
+
+const result2 = Json.parse('not valid json{')
+// E.left(SyntaxError: Unexpected token 'n', "not valid json{" is not valid JSON)
+```
+
+The error type is `unknown` because `JSON.parse` can throw any value (in practice it always throws `SyntaxError`, but TypeScript can't prove that). The success type is also `unknown` — the parsed value could be any JSON-compatible shape. You narrow it with a decoder.
+
+### Json.stringify — safe JSON.stringify
+
+`JSON.stringify` can also throw when the value contains circular references or `BigInt`:
+
+```typescript
+const s1 = Json.stringify({ name: 'Alice', age: 30 })
+// E.right('{"name":"Alice","age":30}')
+
+const circular: Record<string, unknown> = {}
+circular.self = circular
+
+const s2 = Json.stringify(circular)
+// E.left(TypeError: Converting circular structure to JSON)
+```
+
+### Combining with E.chain for type narrowing
+
+The real power of `Json.parse` comes from chaining it with a type guard or decoder. Here is the full pattern:
+
+```typescript
+type User = { name: string; age: number }
+
+// A simple type guard to narrow unknown -> User
+const isUser = (value: unknown): value is User =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as Record<string, unknown>).name === 'string' &&
+  typeof (value as Record<string, unknown>).age === 'number'
+
+const decodeUser = (value: unknown): E.Either<string, User> =>
+  isUser(value) ? E.right(value) : E.left('Invalid user shape')
+
+// Compose: parse JSON string, then decode the unknown value
+const parseUser = (raw: string): E.Either<unknown, User> =>
+  pipe(
+    Json.parse(raw),    // Either<unknown, unknown>
+    E.chain(decodeUser) // Either<unknown | string, User>
+  )
+
+parseUser('{"name":"Alice","age":30}')
+// E.right({ name: 'Alice', age: 30 })
+
+parseUser('{"name":"Alice"}')
+// E.left('Invalid user shape')
+
+parseUser('definitely not json')
+// E.left(SyntaxError: ...)
+```
+
+### Full pipeline: parse → decode → transform → render
+
+```typescript
+const displayUser = (raw: string): string =>
+  pipe(
+    raw,
+    Json.parse,
+    E.chain(decodeUser),
+    E.map(user => `${user.name} (age ${user.age})`),
+    E.getOrElse(() => 'Could not parse user')
+  )
+
+displayUser('{"name":"Bob","age":25}')  // 'Bob (age 25)'
+displayUser('bad json')                  // 'Could not parse user'
+displayUser('{"name":"Bob"}')            // 'Could not parse user'
+```
+
+### Using with a real decoder library (zod example)
+
+In production you would replace the manual type guard with a library:
+
+```typescript
+import { z } from 'zod'
+
+const UserSchema = z.object({ name: z.string(), age: z.number() })
+
+const decodeWithZod = (value: unknown): E.Either<string, User> => {
+  const result = UserSchema.safeParse(value)
+  return result.success
+    ? E.right(result.data)
+    : E.left(result.error.issues.map(i => i.message).join(', '))
+}
+
+const parseUserZod = (raw: string): E.Either<unknown, User> =>
+  pipe(Json.parse(raw), E.chain(decodeWithZod))
+```
+
+The pattern is the same regardless of which decoder library you use: `Json.parse` handles the syntax layer, your decoder handles the shape layer.
+
+## When to Use / When NOT to Use
+
+**Use `fp-ts/Json` when:**
+
+- Parsing untrusted input: API response bodies, `localStorage` values, environment variables, user-submitted data
+- You want to chain parse + decode + transform in a single `pipe` pipeline without try/catch
+- Your error handling is already `Either`-based and you want consistent error plumbing throughout
+- You want the type system to remind you that the parsed value's shape is unknown until decoded
+
+**Do NOT use `fp-ts/Json` when:**
+
+- **The JSON is trusted and known valid.** If you control the source (e.g. a compile-time constant, data you stringified yourself moments ago), `JSON.parse` with a cast is simpler and clearer.
+- **You already have a try/catch boundary.** If the call is inside a catch block, the Either layer adds ceremony without benefit.
+- **You need a specific error type.** `Json.parse` uses `unknown` for errors. If you need a typed error (e.g. a `ParseError` class), use `E.tryCatch` directly: `E.tryCatch(() => JSON.parse(raw), e => new ParseError(String(e)))`.
+- **You need to parse very large JSON.** For streaming parsers or performance-sensitive paths, specialized libraries are more appropriate than `JSON.parse` wrappers.
+
+## Real-World Example
+
+A common scenario: reading saved preferences from `localStorage`, which may contain invalid JSON (corrupted storage, schema migration, browser bugs):
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as Json from 'fp-ts/Json'
+import * as E from 'fp-ts/Either'
+import * as O from 'fp-ts/Option'
+
+type Preferences = {
+  theme: 'light' | 'dark'
+  fontSize: number
+}
+
+const defaultPrefs: Preferences = { theme: 'light', fontSize: 16 }
+
+const isPreferences = (v: unknown): v is Preferences => {
+  if (typeof v !== 'object' || v === null) return false
+  const obj = v as Record<string, unknown>
+  return (obj.theme === 'light' || obj.theme === 'dark') &&
+    typeof obj.fontSize === 'number'
+}
+
+const decodePreferences = (v: unknown): E.Either<string, Preferences> =>
+  isPreferences(v) ? E.right(v) : E.left('Invalid preferences shape')
+
+// Safely read preferences — returns default on any failure
+const loadPreferences = (): Preferences => {
+  const raw = localStorage.getItem('user-prefs') // string | null
+
+  return pipe(
+    O.fromNullable(raw),               // Option<string>
+    O.map(Json.parse),                 // Option<Either<unknown, unknown>>
+    O.chain(O.fromEither),             // Option<unknown>
+    O.chain(v =>
+      O.fromEither(decodePreferences(v)) // Option<Preferences>
+    ),
+    O.getOrElse(() => defaultPrefs)    // Preferences
+  )
+}
+
+// Safely save preferences — log error instead of crashing
+const savePreferences = (prefs: Preferences): void =>
+  pipe(
+    Json.stringify(prefs),
+    E.fold(
+      err => console.error('Failed to stringify preferences:', err),
+      json => localStorage.setItem('user-prefs', json)
+    )
+  )
+```
+
+Every failure mode — missing key, malformed JSON, wrong schema, circular reference — collapses into the same fallback without a single try/catch or `undefined` check in the consuming code.
+
+## Key Takeaways
+
+- `Json.parse` wraps `JSON.parse` in `Either<unknown, unknown>` — syntax errors become `Left` instead of thrown exceptions
+- `Json.stringify` wraps `JSON.stringify` — circular reference errors become `Left` instead of thrown exceptions
+- The success type is `unknown` by design: you must chain a decoder to get a typed value
+- The canonical pattern is `pipe(raw, Json.parse, E.chain(myDecoder))` — parse the syntax, then decode the shape
+- Use `Json.parse` for untrusted input pipelines; use plain `JSON.parse` when the input is trusted and you already have error containment

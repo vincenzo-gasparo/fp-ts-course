@@ -1,32 +1,275 @@
 ---
-title: "Record utilities: fromEntries, toEntries, lookup"
+title: "IOEither: Synchronous Effects That Can Fail"
 day: 11
-description: "Use fp-ts Record module for type-safe dictionary operations — building, querying, and transforming key-value collections without runtime errors."
+description: "Use IOEither to model synchronous operations that can fail — the synchronous counterpart to TaskEither, for localStorage, DOM access, and native APIs."
+quiz:
+  - question: "What is the relationship between IOEither and TaskEither?"
+    options:
+      - "IOEither is a subset of TaskEither — all IOEither operations can be lifted to TaskEither"
+      - "They are the same type with different names"
+      - "IOEither handles async operations and TaskEither handles sync ones"
+    correct: 0
+    explanation: "IOEither is the synchronous counterpart to TaskEither. You can lift any IOEither into TaskEither using TE.fromIOEither, which is useful when mixing sync and async operations."
+  - question: "How do you execute an IOEither<E, A> to get an Either<E, A>?"
+    options:
+      - "Call .run() on it"
+      - "Await it like a Promise"
+      - "Call it as a function: const result: Either<E, A> = myIOEither()"
+    correct: 2
+    explanation: "IOEither<E, A> is just () => Either<E, A>. You execute it by calling it as a zero-argument function. The result is synchronous — no Promise, no await needed."
+  - question: "When should you use IO instead of IOEither?"
+    options:
+      - "When the synchronous operation cannot fail"
+      - "When you need async behavior"
+      - "IO and IOEither are interchangeable"
+    correct: 0
+    explanation: "IO<A> is for synchronous effects that always succeed (like reading Date.now() or Math.random()). Use IOEither when the operation can fail — like localStorage.getItem followed by JSON.parse."
 ---
 
-## Type-safe Record Operations
+## Introduction
 
-The fp-ts Record module provides utilities for working with string-keyed objects. Unlike direct property access, these functions are total and return Option for missing keys.
+You have seen TaskEither for async operations that can fail. But not every fallible operation is asynchronous. Reading from `localStorage`, calling a synchronous native API, or parsing data can all fail — without involving a `Promise`.
 
-## Building and querying records
+`IOEither<E, A>` is the synchronous counterpart to `TaskEither<E, A>`. Where `TaskEither` is `() => Promise<Either<E, A>>`, `IOEither` is simply `() => Either<E, A>`. It captures: "this is a synchronous side effect that might produce an error."
+
+The fp-ts type hierarchy makes the relationship explicit:
+
+```
+IO<A>          = () => A                     (sync, infallible)
+IOEither<E, A> = () => Either<E, A>          (sync, fallible)
+Task<A>        = () => Promise<A>            (async, infallible)
+TaskEither<E, A> = () => Promise<Either<E, A>> (async, fallible)
+```
+
+When you reach for IOEither, you're saying: "I have a synchronous side effect, and it can fail."
+
+## Core API
 
 ```typescript
 import { pipe } from 'fp-ts/function'
-import * as R from 'fp-ts/Record'
-import * as O from 'fp-ts/Option'
-
-const scores: Record<string, number> = { alice: 95, bob: 80, carol: 88 }
-
-// lookup returns Option instead of undefined
-const aliceScore = pipe(scores, R.lookup('alice'))
-console.log(aliceScore) // O.some(95)
-
-const missingScore = pipe(scores, R.lookup('dave'))
-console.log(missingScore) // O.none
-
-// map transforms all values
-const doubled = pipe(scores, R.map(score => score * 2))
-console.log(doubled) // { alice: 190, bob: 160, carol: 176 }
+import * as IOE from 'fp-ts/IOEither'
+import * as E from 'fp-ts/Either'
 ```
 
-`R.lookup` never returns `undefined`, making your code safer and more composable.
+### IOE.tryCatch — wrapping a throwing sync operation
+
+The primary constructor: wrap a function that may throw into an IOEither:
+
+```typescript
+// Reading localStorage can throw in some environments (private browsing, storage full)
+const readLocalStorage = (key: string): IOE.IOEither<Error, string | null> =>
+  IOE.tryCatch(
+    () => localStorage.getItem(key),
+    E.toError  // converts unknown thrown value to Error
+  )
+```
+
+Calling `readLocalStorage('theme')` returns an `IOEither` — a description of the effect. Nothing happens until you call it:
+
+```typescript
+const result: E.Either<Error, string | null> = readLocalStorage('theme')()
+// E.right('dark') or E.right(null) or E.left(Error('...'))
+```
+
+### IOE.right / IOE.left — lifting values
+
+```typescript
+const successIO: IOE.IOEither<never, number> = IOE.right(42)
+const failureIO: IOE.IOEither<string, never> = IOE.left('something went wrong')
+```
+
+### IOE.map — transform the success value
+
+```typescript
+const readTheme = pipe(
+  IOE.tryCatch(
+    () => localStorage.getItem('theme'),
+    E.toError
+  ),
+  IOE.map(raw => raw ?? 'light')   // replace null with default
+)
+
+// Executing:
+const theme: E.Either<Error, string> = readTheme()
+// E.right('dark') or E.right('light') or E.left(Error('...'))
+```
+
+### IOE.mapLeft — transform the error
+
+```typescript
+const readThemeSafer = pipe(
+  IOE.tryCatch(
+    () => localStorage.getItem('theme'),
+    E.toError
+  ),
+  IOE.mapLeft(err => `Storage error: ${err.message}`)
+)
+```
+
+### IOE.chain — sequence dependent operations
+
+```typescript
+import * as Json from 'fp-ts/Json'
+
+type Preferences = { theme: string; fontSize: number }
+
+const loadPrefs: IOE.IOEither<string, Preferences> = pipe(
+  // Step 1: read the raw string
+  IOE.tryCatch(
+    () => localStorage.getItem('prefs'),
+    err => `Read failed: ${String(err)}`
+  ),
+  // Step 2: fail if key was absent
+  IOE.chain(raw =>
+    raw !== null ? IOE.right(raw) : IOE.left('Key not found')
+  ),
+  // Step 3: parse JSON
+  IOE.chain(raw =>
+    pipe(
+      Json.parse(raw),
+      E.mapLeft(() => 'Invalid JSON'),
+      IOE.fromEither
+    )
+  ),
+  // Step 4: narrow to Preferences shape
+  IOE.chain(value =>
+    typeof value === 'object' && value !== null
+      ? IOE.right(value as Preferences)
+      : IOE.left('Unexpected shape')
+  )
+)
+
+// Execute at the edge
+const prefs = loadPrefs()
+```
+
+### IOE.fold — extract a final value
+
+```typescript
+const themeOrDefault: IOE.IO<string> = pipe(
+  readTheme,
+  IOE.fold(
+    _err => () => 'light',         // IO<string> on failure
+    theme => () => theme           // IO<string> on success
+  )
+)
+
+const theme = themeOrDefault() // 'dark' | 'light' — always a string
+```
+
+### Lifting IOEither into TaskEither
+
+When you need to combine sync and async operations in a single pipeline, lift the IOEither:
+
+```typescript
+import * as TE from 'fp-ts/TaskEither'
+
+const loadPrefsAsync: TE.TaskEither<string, Preferences> =
+  TE.fromIOEither(loadPrefs)
+
+// Now you can chain it with async operations:
+const program = pipe(
+  loadPrefsAsync,
+  TE.chain(prefs => fetchUserProfile(prefs.theme))
+)
+```
+
+## When to Use / When NOT to Use
+
+**Use `fp-ts/IOEither` when:**
+
+- You have a synchronous operation that can fail: `localStorage`, `sessionStorage`, DOM API calls, synchronous file reading (Node.js), type narrowing that can fail
+- You want to compose multiple fallible sync steps in a clean pipeline
+- You need to lift a sync error into a TaskEither pipeline via `TE.fromIOEither`
+- You want the same error-handling semantics as TaskEither for synchronous code
+
+**Do NOT use `fp-ts/IOEither` when:**
+
+- **The operation is asynchronous.** If it involves Promises, `await`, or callbacks, use `TaskEither` instead. IOEither is explicitly for synchronous effects.
+- **The operation cannot fail.** If there is no realistic error path (e.g. `Date.now()`, `Math.random()`), use `IO<A>` — IOEither's error channel would always be `never`, adding noise.
+- **You're wrapping something with a single try/catch.** If the error handling is simple and localized, a plain try/catch can be cleaner. IOEither earns its complexity when you need to compose multiple fallible steps.
+- **The sync operation is a pure computation.** If there are no side effects, use plain functions — no wrapper needed.
+
+## Real-World Example
+
+A complete localStorage-backed preferences system that composes read, parse, validate, and fallback in a single typed pipeline:
+
+```typescript
+import { pipe, flow } from 'fp-ts/function'
+import * as IOE from 'fp-ts/IOEither'
+import * as IO from 'fp-ts/IO'
+import * as E from 'fp-ts/Either'
+import * as Json from 'fp-ts/Json'
+
+type Theme = 'light' | 'dark'
+type Prefs = { theme: Theme; fontSize: number }
+
+const STORAGE_KEY = 'app-prefs'
+const DEFAULT_PREFS: Prefs = { theme: 'light', fontSize: 16 }
+
+// Wrap localStorage access in IOEither
+const readStorage = (key: string): IOE.IOEither<string, string> =>
+  IOE.tryCatch(
+    () => {
+      const v = localStorage.getItem(key)
+      if (v === null) throw new Error(`Key "${key}" not found`)
+      return v
+    },
+    err => String(err)
+  )
+
+// Parse and validate in a pipeline
+const parsePrefs = (raw: string): E.Either<string, Prefs> =>
+  pipe(
+    Json.parse(raw),
+    E.mapLeft(() => 'JSON parse failed'),
+    E.chain(v => {
+      if (
+        typeof v === 'object' && v !== null &&
+        ((v as any).theme === 'light' || (v as any).theme === 'dark') &&
+        typeof (v as any).fontSize === 'number'
+      ) {
+        return E.right(v as Prefs)
+      }
+      return E.left('Invalid preferences shape')
+    })
+  )
+
+// Compose: read → parse → validate
+const loadPrefs: IOE.IOEither<string, Prefs> = pipe(
+  readStorage(STORAGE_KEY),
+  IOE.chain(raw => IOE.fromEither(parsePrefs(raw)))
+)
+
+// Save preferences
+const savePrefs = (prefs: Prefs): IOE.IOEither<string, void> =>
+  pipe(
+    IOE.fromEither(Json.stringify(prefs)),
+    IOE.mapLeft(() => 'Stringify failed'),
+    IOE.chain(json =>
+      IOE.tryCatch(
+        () => localStorage.setItem(STORAGE_KEY, json),
+        err => String(err)
+      )
+    )
+  )
+
+// Execute at the edge — always returns a Prefs (using default on any error)
+const getPrefsWithFallback: IO.IO<Prefs> = pipe(
+  loadPrefs,
+  IOE.getOrElse(() => IO.of(DEFAULT_PREFS))
+)
+
+// Usage
+const prefs = getPrefsWithFallback()  // Prefs — never throws
+```
+
+This pattern makes every failure path explicit in the types, eliminates try/catch nesting, and lets you compose validation steps in a readable pipeline.
+
+## Key Takeaways
+
+- `IOEither<E, A>` is `() => Either<E, A>` — the synchronous, fallible counterpart to `TaskEither`
+- Execute an `IOEither` by calling it as a function: `const result = myIOEither()` — synchronous, no `await`
+- `IOE.tryCatch` is the primary constructor: wrap a throwing sync operation, convert the thrown value to your error type
+- Use `IOE.chain` to sequence multiple fallible sync steps without nested try/catch
+- Lift `IOEither` into a `TaskEither` pipeline with `TE.fromIOEither` when you need to mix sync and async operations

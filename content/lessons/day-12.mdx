@@ -1,38 +1,273 @@
 ---
-title: "String and NonEmptyArray utilities"
+title: "ReaderIO: Dependency Injection for Synchronous Effects"
 day: 12
-description: "Explore fp-ts String and NonEmptyArray modules to safely work with text and collections that must have at least one element."
+description: "Learn the Reader pattern for making dependencies explicit in the type system, and how ReaderIO combines dependency injection with synchronous IO effects."
+quiz:
+  - question: "What problem does the Reader pattern solve?"
+    options:
+      - "It makes async operations synchronous"
+      - "It makes implicit dependencies (globals, singletons, closures) explicit in the function type"
+      - "It replaces Either for error handling"
+    correct: 1
+    explanation: "Reader<Env, A> takes an environment Env and produces A. Dependencies appear in the type signature instead of being hidden in closures or accessed as globals."
+  - question: "How do you run a ReaderIO<Env, A> to get a value?"
+    options:
+      - "You call it with the environment, then call the result: myRIO(env)()"
+      - "You await it like a Promise"
+      - "You use pipe with RIO.run"
+    correct: 0
+    explanation: "ReaderIO<Env, A> is Env => IO<A>, which is Env => () => A. You provide the environment first: myRIO(env), then execute the IO: myRIO(env)()."
+  - question: "When is it NOT worth using Reader?"
+    options:
+      - "When you have more than 5 dependencies"
+      - "When you have 1-2 dependencies that are easy to pass as function arguments"
+      - "When working with synchronous code"
+    correct: 1
+    explanation: "Reader has a learning curve and adds abstraction. If you have 1-2 dependencies, passing them as plain function arguments is simpler and more readable. Reader pays off when many functions share the same environment."
 ---
 
-## NonEmptyArray: Safety Through Types
+## Introduction
 
-`NonEmptyArray<A>` is a tuple `[A, ...A[]]` — an array guaranteed to have at least one element at the type level. This eliminates head/first access errors.
+As a program grows, functions start needing more dependencies: a logger, a config object, a database client, a clock. The naive solution is to pass them as additional arguments — but this creates a proliferation of parameters that every function in the call chain must thread through. The other common solution is globals or singletons, but these hide dependencies and make testing hard.
 
-## Working with NonEmptyArray and String
+The **Reader** pattern is the functional answer. A `Reader<Env, A>` is a function `Env => A`: it takes an environment object containing everything the computation needs, and returns a result. The environment is provided once at the program's entry point, not threaded through every individual call.
+
+`ReaderIO<Env, A>` combines `Reader` with `IO`: it is `Env => IO<A>`, or equivalently `Env => () => A`. It is the right type when you need dependency injection AND synchronous side effects — the most common case being a logger that needs a config.
+
+## The Reader Pattern: A Progression
+
+The best way to understand Reader is to see the progression from hard-coded dependency to Reader:
+
+**Step 1: Hard-coded dependency** — works, but untestable:
+
+```typescript
+const log = (message: string): void => {
+  console.log(`[INFO] ${message}`)  // hard-coded to console.log
+}
+```
+
+**Step 2: Closure / argument** — testable, but every caller must pass `logger`:
+
+```typescript
+type Logger = { log: (level: string, msg: string) => void }
+
+const makeLog = (logger: Logger) => (message: string): void => {
+  logger.log('INFO', message)
+}
+```
+
+**Step 3: Reader** — dependencies are explicit in the type, provided once at the edge:
+
+```typescript
+import * as RIO from 'fp-ts/ReaderIO'
+import * as IO from 'fp-ts/IO'
+
+type AppEnv = {
+  logger: { log: (level: string, msg: string) => void }
+  config: { logLevel: 'debug' | 'info' | 'warn' }
+}
+
+const logMessage = (message: string): RIO.ReaderIO<AppEnv, void> =>
+  (env) => () => {
+    if (env.config.logLevel === 'debug' || env.config.logLevel === 'info') {
+      env.logger.log('INFO', message)
+    }
+  }
+```
+
+## Core API
 
 ```typescript
 import { pipe } from 'fp-ts/function'
-import * as NEA from 'fp-ts/NonEmptyArray'
-import * as A from 'fp-ts/Array'
-import * as O from 'fp-ts/Option'
-
-const tags = ['typescript', 'functional', 'fp-ts']
-
-// fromArray returns Option<NonEmptyArray>
-const nonEmpty = A.fromArray(tags)
-console.log(nonEmpty) // O.some(['typescript', 'functional', 'fp-ts'])
-
-// head is safe on NonEmptyArray — no Option needed
-const safeHead = pipe(
-  O.fromNullable(tags[0]),
-  O.getOrElse(() => 'no tags')
-)
-console.log(safeHead) // "typescript"
-
-// min/max are safe on NonEmptyArray
-const nea: NEA.NonEmptyArray<number> = [3, 1, 4, 1, 5, 9, 2, 6]
-const maxVal = NEA.max({ compare: (a, b) => a < b ? -1 : a > b ? 1 : 0 })(nea)
-console.log(maxVal) // 9
+import * as RIO from 'fp-ts/ReaderIO'
+import * as IO from 'fp-ts/IO'
 ```
 
-Use NonEmptyArray when your domain logic requires at least one item — encode the constraint in the type.
+### RIO.of — lift a pure value
+
+```typescript
+const pure: RIO.ReaderIO<unknown, number> = RIO.of(42)
+
+// Running: provide env, then call the IO
+const result = pure({})()  // 42
+```
+
+### RIO.ask — access the environment
+
+```typescript
+type Env = { config: { apiBase: string } }
+
+const getApiBase: RIO.ReaderIO<Env, string> =
+  pipe(
+    RIO.ask<Env>(),                       // ReaderIO<Env, Env>
+    RIO.map(env => env.config.apiBase)    // ReaderIO<Env, string>
+  )
+```
+
+### RIO.map — transform the result
+
+```typescript
+const getApiBasePrefixed: RIO.ReaderIO<Env, string> = pipe(
+  getApiBase,
+  RIO.map(base => `${base}/v2`)
+)
+```
+
+### RIO.chain — sequence dependent steps
+
+```typescript
+type AppEnv = {
+  logger: { info: (msg: string) => void }
+  counter: { increment: () => number }
+}
+
+// Two ReaderIO operations that share the same environment
+const logStart: RIO.ReaderIO<AppEnv, void> =
+  env => () => env.logger.info('Starting...')
+
+const incrementCounter: RIO.ReaderIO<AppEnv, number> =
+  env => () => env.counter.increment()
+
+// Sequence them: logStart, then incrementCounter
+const program: RIO.ReaderIO<AppEnv, number> = pipe(
+  logStart,
+  RIO.chain(() => incrementCounter)
+)
+```
+
+### Running a ReaderIO — provide env, then execute
+
+```typescript
+// Create the concrete environment
+const testEnv: AppEnv = {
+  logger: { info: (msg) => console.log(msg) },
+  counter: (() => { let n = 0; return { increment: () => ++n } })(),
+}
+
+// Execute: provide env first, then call the IO
+const result: number = program(testEnv)()
+// Logs "Starting..." and returns 1
+```
+
+### RIO.local — transform the environment for a sub-program
+
+When a sub-program needs a different environment shape:
+
+```typescript
+type AdminEnv = { logger: { info: (msg: string) => void } }
+type FullEnv = AdminEnv & { db: { query: (sql: string) => unknown[] } }
+
+// A sub-program that only needs AdminEnv
+const adminLog = (msg: string): RIO.ReaderIO<AdminEnv, void> =>
+  env => () => env.logger.info(`[ADMIN] ${msg}`)
+
+// Use it inside a FullEnv program using local to narrow the env
+const program2: RIO.ReaderIO<FullEnv, void> = pipe(
+  adminLog('User deleted'),
+  RIO.local((fullEnv: FullEnv) => fullEnv) // extract AdminEnv from FullEnv
+)
+```
+
+## When to Use / When NOT to Use
+
+**Use `ReaderIO` when:**
+
+- Multiple functions share the same environment (logger, config, clock, feature flags) and you want to inject it once
+- You want dependencies to appear in the type signature — making them visible, swappable, and testable
+- You are writing a module-level or service-level program where the environment is a first-class concern
+- You want to test functions by injecting mock dependencies without module mocking or global mutation
+
+**Do NOT use `ReaderIO` when:**
+
+- **You have 1-2 dependencies.** If a function needs a logger and nothing else, passing it as a plain argument is simpler. Reader has a learning curve — the abstraction must earn its cost.
+- **The team is unfamiliar with Reader.** Reader is one of the less-intuitive patterns in fp-ts. If the codebase mixes Reader with imperative code, the boundary becomes confusing. Introduce Reader when the team is comfortable with Option and Either first.
+- **The environment is trivial.** If the "environment" is just a single constant value, a closure is cleaner.
+- **You need async effects.** For async + DI, use `ReaderTaskEither` instead (Day 13).
+
+## Real-World Example
+
+A logger service that reads its configuration from a `Reader` environment, including log level and output destination:
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as RIO from 'fp-ts/ReaderIO'
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+type LoggerEnv = {
+  logger: {
+    write: (level: LogLevel, message: string) => void
+  }
+  config: {
+    logLevel: LogLevel
+    serviceName: string
+  }
+}
+
+// Numeric severity for comparison
+const severity: Record<LogLevel, number> = {
+  debug: 0, info: 1, warn: 2, error: 3,
+}
+
+const shouldLog = (configured: LogLevel, requested: LogLevel): boolean =>
+  severity[requested] >= severity[configured]
+
+// Core log function — reads its env to decide whether to write
+const log = (level: LogLevel, message: string): RIO.ReaderIO<LoggerEnv, void> =>
+  (env) => () => {
+    if (shouldLog(env.config.logLevel, level)) {
+      env.logger.write(level, `[${env.config.serviceName}] ${message}`)
+    }
+  }
+
+// Convenience functions
+const logInfo  = (msg: string) => log('info',  msg)
+const logWarn  = (msg: string) => log('warn',  msg)
+const logDebug = (msg: string) => log('debug', msg)
+
+// A small program that uses the logger
+const processUser = (userId: number): RIO.ReaderIO<LoggerEnv, string> =>
+  pipe(
+    logDebug(`Processing user ${userId}`),
+    RIO.chain(() => logInfo(`Found user ${userId}`)),
+    RIO.chain(() => RIO.of(`user-${userId}-processed`))
+  )
+
+// --- At the program edge: provide the real environment ---
+
+const productionEnv: LoggerEnv = {
+  logger: {
+    write: (level, msg) => console.log(`${level.toUpperCase()}: ${msg}`),
+  },
+  config: {
+    logLevel: 'info',    // debug messages are suppressed
+    serviceName: 'UserService',
+  },
+}
+
+const finalResult = processUser(42)(productionEnv)()
+// Logs: "INFO: [UserService] Found user 42"
+// debug is suppressed because logLevel is 'info'
+// Returns: 'user-42-processed'
+
+// --- In tests: provide a mock environment ---
+
+const testEnv: LoggerEnv = {
+  logger: { write: jest.fn() },
+  config: { logLevel: 'debug', serviceName: 'TestService' },
+}
+
+const testResult = processUser(42)(testEnv)()
+// testEnv.logger.write was called — assertable in tests
+```
+
+No module mocking, no global mutation, no `jest.spyOn` on console. The dependency is passed in explicitly.
+
+## Key Takeaways
+
+- `Reader<Env, A>` is `Env => A` — it makes dependencies explicit in the type instead of implicit via closures or globals
+- `ReaderIO<Env, A>` is `Env => () => A` — adds synchronous IO effects to the Reader pattern
+- Execute with two calls: `myRIO(env)()` — first provide the environment, then run the IO
+- `RIO.ask()` accesses the full environment; use `RIO.map` to extract what you need
+- Use `RIO.chain` to sequence multiple ReaderIO steps that share the same environment
+- Reader pays off when many functions share an environment; for 1-2 dependencies, plain arguments are simpler
