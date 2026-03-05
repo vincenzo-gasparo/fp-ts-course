@@ -3,6 +3,8 @@
 .next/
 out/
 node_modules/
+# Velite generated output
+.velite/
 # Env files
 .env*
 !.env.example
