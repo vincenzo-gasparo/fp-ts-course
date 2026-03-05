@@ -1,0 +1,34 @@
+---
+title: "Either: Typed Error Handling"
+day: 3
+description: "Use Either to represent computations that can fail with a typed error, replacing try/catch with composable, type-safe error handling."
+---
+
+## Why Either?
+
+Either represents a value that can be one of two types: a Left (usually an error) or a Right (the success value). This makes error handling explicit and composable.
+
+## Using Either for validation
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as E from 'fp-ts/Either'
+
+const parseAge = (s: string): E.Either<string, number> => {
+  const n = parseInt(s, 10)
+  return isNaN(n) ? E.left('Not a number') : n < 0 ? E.left('Age must be positive') : E.right(n)
+}
+
+const result = pipe(
+  parseAge('25'),
+  E.map(age => age + 1),
+  E.fold(
+    err => `Error: ${err}`,
+    age => `Next year you will be ${age}`
+  )
+)
+
+console.log(result) // "Next year you will be 26"
+```
+
+Either lets you chain operations that may fail without nested try/catch blocks.

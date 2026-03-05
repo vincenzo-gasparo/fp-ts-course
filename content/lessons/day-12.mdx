@@ -1,0 +1,38 @@
+---
+title: "String and NonEmptyArray utilities"
+day: 12
+description: "Explore fp-ts String and NonEmptyArray modules to safely work with text and collections that must have at least one element."
+---
+
+## NonEmptyArray: Safety Through Types
+
+`NonEmptyArray<A>` is a tuple `[A, ...A[]]` — an array guaranteed to have at least one element at the type level. This eliminates head/first access errors.
+
+## Working with NonEmptyArray and String
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as NEA from 'fp-ts/NonEmptyArray'
+import * as A from 'fp-ts/Array'
+import * as O from 'fp-ts/Option'
+
+const tags = ['typescript', 'functional', 'fp-ts']
+
+// fromArray returns Option<NonEmptyArray>
+const nonEmpty = A.fromArray(tags)
+console.log(nonEmpty) // O.some(['typescript', 'functional', 'fp-ts'])
+
+// head is safe on NonEmptyArray — no Option needed
+const safeHead = pipe(
+  O.fromNullable(tags[0]),
+  O.getOrElse(() => 'no tags')
+)
+console.log(safeHead) // "typescript"
+
+// min/max are safe on NonEmptyArray
+const nea: NEA.NonEmptyArray<number> = [3, 1, 4, 1, 5, 9, 2, 6]
+const maxVal = NEA.max({ compare: (a, b) => a < b ? -1 : a > b ? 1 : 0 })(nea)
+console.log(maxVal) // 9
+```
+
+Use NonEmptyArray when your domain logic requires at least one item — encode the constraint in the type.

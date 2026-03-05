@@ -1,0 +1,35 @@
+---
+title: "Monad: Sequential Effects and flatMap"
+day: 9
+description: "Master the Monad pattern to sequence effectful computations where each step depends on the result of the previous — the functional alternative to async/await."
+---
+
+## What Makes Something a Monad?
+
+A Monad extends Functor with `chain` (also called `flatMap` or `bind`). It lets you sequence computations where the next step depends on the result of the current step.
+
+## Sequential async with Monad
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as TE from 'fp-ts/TaskEither'
+
+type User = { id: number; name: string; teamId: number }
+type Team = { id: number; name: string }
+
+const getUser = (id: number): TE.TaskEither<Error, User> =>
+  TE.right({ id, name: 'Alice', teamId: 7 })
+
+const getTeam = (teamId: number): TE.TaskEither<Error, Team> =>
+  TE.right({ id: teamId, name: 'Engineering' })
+
+const program = pipe(
+  getUser(1),
+  TE.chain(user => getTeam(user.teamId)),
+  TE.map(team => `Team: ${team.name}`)
+)
+
+program().then(console.log) // "Team: Engineering"
+```
+
+`chain` threads the success value from one TaskEither into the next, short-circuiting on the first error.

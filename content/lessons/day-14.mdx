@@ -1,0 +1,45 @@
+---
+title: "Real-world patterns: validation pipelines"
+day: 14
+description: "Build production-grade validation pipelines using fp-ts that collect all errors, compose validators, and integrate cleanly with form libraries."
+---
+
+## Validation vs Either
+
+While `Either` short-circuits on the first error, `These` and `Validation` collect all errors. For form validation you often want all errors at once.
+
+## A complete validation pipeline
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as E from 'fp-ts/Either'
+import { sequenceS } from 'fp-ts/Apply'
+
+type ValidationError = string
+type ValidatedUser = { name: string; email: string; age: number }
+
+const validateName = (s: string): E.Either<ValidationError, string> =>
+  s.trim().length > 0 ? E.right(s.trim()) : E.left('Name is required')
+
+const validateEmail = (s: string): E.Either<ValidationError, string> =>
+  s.includes('@') ? E.right(s) : E.left('Email must contain @')
+
+const validateAge = (n: unknown): E.Either<ValidationError, number> => {
+  const age = Number(n)
+  return !isNaN(age) && age >= 18 && age <= 120
+    ? E.right(age)
+    : E.left('Age must be between 18 and 120')
+}
+
+const validateUser = (input: Record<string, unknown>): E.Either<ValidationError, ValidatedUser> =>
+  sequenceS(E.Apply)({
+    name: validateName(String(input.name ?? '')),
+    email: validateEmail(String(input.email ?? '')),
+    age: validateAge(input.age),
+  })
+
+const result = validateUser({ name: 'Alice', email: 'alice@example.com', age: 28 })
+console.log(result) // E.right({ name: 'Alice', email: 'alice@example.com', age: 28 })
+```
+
+This pattern scales to any number of fields and composes cleanly with the rest of your fp-ts codebase.

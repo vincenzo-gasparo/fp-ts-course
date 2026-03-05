@@ -32,6 +32,7 @@ export default defineConfig({
     base: '/static/',
     name: '[name]-[hash:6][ext]',
     clean: true,
+    format: 'cjs',
   },
   collections: {
     lessons: {

@@ -1,0 +1,34 @@
+---
+title: "Array utilities: map, filter, reduce"
+day: 10
+description: "Explore fp-ts Array module utilities that provide a type-class aware, composable alternative to native array methods."
+---
+
+## fp-ts Array vs Native Arrays
+
+While JavaScript's native array methods work, fp-ts provides a richer set of array utilities that integrate with the type class hierarchy and work seamlessly in pipelines.
+
+## Working with fp-ts Array module
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as A from 'fp-ts/Array'
+import * as O from 'fp-ts/Option'
+
+const numbers = [1, 2, 3, 4, 5, 6]
+
+const result = pipe(
+  numbers,
+  A.filter(n => n % 2 === 0),
+  A.map(n => n * n),
+  A.reduce(0, (acc, n) => acc + n)
+)
+
+console.log(result) // 56 (4 + 16 + 36)
+
+// findFirst returns Option, not undefined
+const first = pipe(numbers, A.findFirst(n => n > 3))
+console.log(first) // O.some(4)
+```
+
+fp-ts array operations are total functions — they never throw and always return predictable types.

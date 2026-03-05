@@ -1,0 +1,35 @@
+---
+title: "TaskEither: Async with Typed Errors"
+day: 6
+description: "Combine Task and Either to handle asynchronous operations that can fail, with typed errors and no try/catch required."
+---
+
+## Async Error Handling the Functional Way
+
+`TaskEither<E, A>` is a `Task<Either<E, A>>` — an async computation that either fails with type `E` or succeeds with type `A`.
+
+## Building an HTTP fetch pipeline
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as TE from 'fp-ts/TaskEither'
+
+const fetchJson = (url: string): TE.TaskEither<Error, unknown> =>
+  TE.tryCatch(
+    () => fetch(url).then(r => r.json()),
+    (e) => e instanceof Error ? e : new Error(String(e))
+  )
+
+const program = pipe(
+  fetchJson('https://api.example.com/users/1'),
+  TE.map(data => JSON.stringify(data)),
+  TE.fold(
+    err => () => Promise.resolve(`Error: ${err.message}`),
+    json => () => Promise.resolve(`Success: ${json}`)
+  )
+)
+
+program().then(console.log)
+```
+
+TaskEither is the workhorse of real-world fp-ts applications handling HTTP, databases, and file I/O.

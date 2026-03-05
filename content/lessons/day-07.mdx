@@ -1,0 +1,31 @@
+---
+title: "Functor: Mapping Over Containers"
+day: 7
+description: "Understand the Functor type class that powers .map() across Option, Either, Task, and arrays — the foundation of functional data transformation."
+---
+
+## What is a Functor?
+
+A Functor is a type class with a single operation: `map`. It lets you apply a function to a value inside a container without unwrapping it. Option, Either, Task, and Array are all Functors.
+
+## Functor laws and usage
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as O from 'fp-ts/Option'
+import * as E from 'fp-ts/Either'
+
+const double = (n: number) => n * 2
+
+// Same map interface across all Functors
+const optionResult = pipe(O.some(5), O.map(double))
+// O.some(10)
+
+const eitherResult = pipe(E.right(5), E.map(double))
+// E.right(10)
+
+const arrayResult = [1, 2, 3].map(double)
+// [2, 4, 6]
+```
+
+The Functor abstraction means you can write generic code that works with any mappable container.

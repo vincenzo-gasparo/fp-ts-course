@@ -1,0 +1,32 @@
+---
+title: "Record utilities: fromEntries, toEntries, lookup"
+day: 11
+description: "Use fp-ts Record module for type-safe dictionary operations — building, querying, and transforming key-value collections without runtime errors."
+---
+
+## Type-safe Record Operations
+
+The fp-ts Record module provides utilities for working with string-keyed objects. Unlike direct property access, these functions are total and return Option for missing keys.
+
+## Building and querying records
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as R from 'fp-ts/Record'
+import * as O from 'fp-ts/Option'
+
+const scores: Record<string, number> = { alice: 95, bob: 80, carol: 88 }
+
+// lookup returns Option instead of undefined
+const aliceScore = pipe(scores, R.lookup('alice'))
+console.log(aliceScore) // O.some(95)
+
+const missingScore = pipe(scores, R.lookup('dave'))
+console.log(missingScore) // O.none
+
+// map transforms all values
+const doubled = pipe(scores, R.map(score => score * 2))
+console.log(doubled) // { alice: 190, bob: 160, carol: 176 }
+```
+
+`R.lookup` never returns `undefined`, making your code safer and more composable.

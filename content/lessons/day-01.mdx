@@ -1,0 +1,26 @@
+---
+title: "Introduction to fp-ts and Functional Programming"
+day: 1
+description: "Get started with fp-ts by understanding its core philosophy and the advantages of typed functional programming in TypeScript."
+---
+
+## What is fp-ts?
+
+fp-ts is a library for typed functional programming in TypeScript. It brings algebraic data types, type classes, and a rich ecosystem of utilities to the TypeScript ecosystem.
+
+## Your first fp-ts code
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as O from 'fp-ts/Option'
+
+const result = pipe(
+  O.some(42),
+  O.map(n => n * 2),
+  O.getOrElse(() => 0)
+)
+
+console.log(result) // 84
+```
+
+This pattern — `pipe` + `Option.map` + `Option.getOrElse` — is the core idiom you will use throughout the course.

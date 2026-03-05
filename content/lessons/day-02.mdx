@@ -1,0 +1,29 @@
+---
+title: "Option: Handling Nullable Values"
+day: 2
+description: "Learn how fp-ts Option eliminates null and undefined errors by making the absence of a value explicit in the type system."
+---
+
+## The Problem with null
+
+In TypeScript, accessing a nullable value without checking leads to runtime errors. Option solves this by making the absence of a value part of the type.
+
+## Working with Option
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as O from 'fp-ts/Option'
+
+const findUser = (id: number): O.Option<string> =>
+  id > 0 ? O.some(`User ${id}`) : O.none
+
+const result = pipe(
+  findUser(1),
+  O.map(name => name.toUpperCase()),
+  O.getOrElse(() => 'Anonymous')
+)
+
+console.log(result) // "USER 1"
+```
+
+By wrapping nullable values in Option, you are forced to handle the missing case explicitly before using the value.

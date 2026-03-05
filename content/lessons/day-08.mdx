@@ -1,0 +1,32 @@
+---
+title: "Applicative: Combining Independent Effects"
+day: 8
+description: "Use Applicative to combine multiple independent effectful computations — validating multiple fields simultaneously, fetching in parallel."
+---
+
+## Independent vs Sequential Effects
+
+Applicative (`ap`) lets you combine effects that do not depend on each other. This is different from Monad (`chain`), which is for sequential effects where each step depends on the previous.
+
+## Parallel validation with Applicative
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as E from 'fp-ts/Either'
+import { sequenceS } from 'fp-ts/Apply'
+
+const validateName = (s: string): E.Either<string, string> =>
+  s.length > 0 ? E.right(s) : E.left('Name is required')
+
+const validateAge = (n: number): E.Either<string, number> =>
+  n >= 0 && n < 150 ? E.right(n) : E.left('Invalid age')
+
+const result = sequenceS(E.Applicative)({
+  name: validateName('Alice'),
+  age: validateAge(30),
+})
+
+console.log(result) // E.right({ name: 'Alice', age: 30 })
+```
+
+`sequenceS` combines multiple Either values into a single Either of an object — collecting all errors.

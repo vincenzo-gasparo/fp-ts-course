@@ -1,0 +1,31 @@
+---
+title: "Task: Asynchronous Computations"
+day: 5
+description: "Represent async operations as lazy, composable values using Task, eliminating Promise chaining and enabling functional async pipelines."
+---
+
+## Task as a Lazy Promise
+
+A `Task<A>` is just a function `() => Promise<A>`. It is lazy — it doesn't run until you call it. This makes Tasks composable and easier to reason about.
+
+## Composing async operations
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as T from 'fp-ts/Task'
+
+const fetchUserId: T.Task<number> = () => Promise.resolve(42)
+
+const fetchUserName = (id: number): T.Task<string> =>
+  () => Promise.resolve(`User ${id}`)
+
+const program = pipe(
+  fetchUserId,
+  T.chain(fetchUserName)
+)
+
+// Nothing runs until you call the Task
+program().then(console.log) // "User 42"
+```
+
+Tasks compose cleanly without the complexity of Promise chaining or async/await nesting.

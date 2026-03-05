@@ -1,0 +1,36 @@
+---
+title: "IO: Synchronous Side Effects"
+day: 13
+description: "Encapsulate synchronous side effects in IO to make them explicit, testable, and composable within functional pipelines."
+---
+
+## Taming Side Effects with IO
+
+`IO<A>` is a thunk `() => A` that wraps a synchronous side effect. By wrapping side effects in IO, you keep your pure functions pure and make effects explicit.
+
+## Using IO for side effects
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as IO from 'fp-ts/IO'
+
+// Wrapping impure operations in IO
+const getTimestamp: IO.IO<number> = () => Date.now()
+
+const getRandomInt = (max: number): IO.IO<number> =>
+  () => Math.floor(Math.random() * max)
+
+const generateId: IO.IO<string> = pipe(
+  getTimestamp,
+  IO.chain(ts => pipe(
+    getRandomInt(1000),
+    IO.map(rand => `${ts}-${rand}`)
+  ))
+)
+
+// Nothing runs until you execute the IO
+const id = generateId()
+console.log(id) // e.g. "1709123456789-342"
+```
+
+IO makes it clear where side effects happen. Functions that return IO are pure — the IO is just a description of an effect.

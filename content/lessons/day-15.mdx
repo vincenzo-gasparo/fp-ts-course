@@ -1,0 +1,56 @@
+---
+title: "Real-world patterns: HTTP clients with fp-ts"
+day: 15
+description: "Build a complete, production-ready HTTP client using TaskEither, with typed errors, retry logic, and composable request pipelines."
+---
+
+## A Production fp-ts HTTP Client
+
+By this final day, you have all the tools to build a complete HTTP client. TaskEither handles async errors, pipe composes operations, and typed errors give you exhaustive error handling.
+
+## Complete HTTP client pattern
+
+```typescript
+import { pipe } from 'fp-ts/function'
+import * as TE from 'fp-ts/TaskEither'
+
+type HttpError =
+  | { _tag: 'NetworkError'; message: string }
+  | { _tag: 'ParseError'; message: string }
+  | { _tag: 'NotFound' }
+  | { _tag: 'Unauthorized' }
+
+const fetchJson = <T>(url: string): TE.TaskEither<HttpError, T> =>
+  TE.tryCatch(
+    async () => {
+      const res = await fetch(url)
+      if (res.status === 404) throw { _tag: 'NotFound' } as HttpError
+      if (res.status === 401) throw { _tag: 'Unauthorized' } as HttpError
+      return res.json() as Promise<T>
+    },
+    (e): HttpError =>
+      e && typeof e === 'object' && '_tag' in e
+        ? e as HttpError
+        : { _tag: 'NetworkError', message: String(e) }
+  )
+
+type User = { id: number; name: string }
+
+const getUser = (id: number): TE.TaskEither<HttpError, User> =>
+  pipe(
+    fetchJson<User>(`https://api.example.com/users/${id}`),
+    TE.mapLeft(err => err)
+  )
+
+const program = pipe(
+  getUser(1),
+  TE.fold(
+    err => () => Promise.resolve(`Error: ${err._tag}`),
+    user => () => Promise.resolve(`Hello, ${user.name}!`)
+  )
+)
+
+program().then(console.log)
+```
+
+Congratulations on completing the fp-ts course. You now have the tools to build robust, type-safe functional programs in TypeScript.
