@@ -3,6 +3,9 @@
 @import "shadcn/tailwind.css";
 @plugin "@tailwindcss/typography";
 
+/* Scan shared components package for Tailwind class names */
+@source "../../../../packages/course-ui/src";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
