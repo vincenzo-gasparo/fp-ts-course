@@ -1,4 +1,4 @@
-name: Deploy Next.js site to Pages
+name: Deploy courses to GitHub Pages
 
 on:
   push:
@@ -11,52 +11,55 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: "20"
-          cache: npm
+          version: 9
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - uses: actions/setup-node@v4
         with:
-          static_site_generator: next
-
-      - name: Restore Next.js cache
-        uses: actions/cache@v4
-        with:
-          path: .next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+          node-version: 20
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
-      - name: Build with Next.js
-        run: npx next build
+      - name: Build fp-ts-course
+        run: pnpm --filter fp-ts-course build
+        env:
+          CI: true
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      # ── Add more courses here as they are created ──────────────────────────
+      # - name: Build rust-course
+      #   run: pnpm --filter rust-course build
+      #   env:
+      #     CI: true
+      # ───────────────────────────────────────────────────────────────────────
+
+      - name: Merge build outputs
+        run: |
+          mkdir -p deploy
+          cp -r apps/fp-ts-course/out deploy/fp-ts-course
+          # cp -r apps/rust-course/out deploy/rust-course
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: ./deploy
 
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
