@@ -4,7 +4,10 @@
   "scripts": {
     "dev:fp-ts": "pnpm --filter fp-ts-course dev",
     "build:all": "pnpm --filter './apps/*' build",
-    "lint:all": "pnpm --filter './apps/*' lint"
+    "lint:all": "pnpm --filter './apps/*' lint",
+    "test:unit": "pnpm --filter './apps/*' exec vitest run",
+    "typecheck": "pnpm --filter './apps/*' --filter './packages/*' exec tsc --noEmit",
+    "clean": "find . -not -path '*/node_modules/*' \\( -name '.next' -o -name 'out' -o -name '.velite' \\) -type d -exec rm -rf {} +"
   },
   "devDependencies": {
     "typescript": "^5"
