@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev:fp-ts": "pnpm --filter fp-ts-course dev",
+    "dev:nextjs": "pnpm --filter nextjs-course dev",
     "dev:all": "pnpm --parallel --filter './apps/*' dev",
     "build:all": "pnpm --filter './apps/*' build",
     "lint:all": "pnpm --filter './apps/*' lint",

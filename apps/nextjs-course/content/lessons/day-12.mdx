@@ -1,0 +1,192 @@
+---
+title: "Error Handling and Not Found Pages"
+day: 12
+description: "Learn how to handle missing resources with not-found.tsx and unexpected runtime errors with error.tsx."
+quiz:
+  - question: "Why must error.tsx be a Client Component?"
+    options:
+      - "Because it uses browser APIs like localStorage"
+      - "Because React Error Boundaries are a client-side feature that rely on class component lifecycle methods"
+      - "Because Next.js Server Components cannot import error.tsx"
+    correct: 1
+    explanation: "React Error Boundaries work by hooking into the componentDidCatch and getDerivedStateFromError lifecycle methods, which only exist in React's client-side rendering. This is a fundamental React constraint — error boundaries are not available in Server Components. Adding 'use client' to error.tsx is not optional; Next.js will throw a build-time error if you forget it."
+  - question: "When should you use notFound() and not-found.tsx instead of error.tsx?"
+    options:
+      - "When a resource simply does not exist (for example, a blog post with that slug was never created)"
+      - "When a database query throws an unexpected exception"
+      - "When you want to redirect the user to the homepage"
+    correct: 0
+    explanation: "notFound() and not-found.tsx are designed for expected 404 situations — the user navigated to a URL for a resource that does not exist. error.tsx is for unexpected runtime errors such as a crashed database, a failed network request, or a bug in rendering code. Using error.tsx for a 404 would result in a 500-style error page, which sends the wrong signal to both the user and search engines."
+  - question: "Does an error.tsx file catch errors thrown inside the layout.tsx that lives in the same directory?"
+    options:
+      - "Yes — error.tsx catches all errors within its entire route segment, including the layout"
+      - "Only if the layout is a Client Component"
+      - "No — error.tsx only covers the page and its children, not its sibling layout"
+    correct: 2
+    explanation: "This is intentional. error.tsx wraps the page rendered below the layout, not the layout itself. The layout stays intact so the user can still see navigation and use it to go somewhere else. To catch errors in the root layout specifically, you need global-error.tsx at the app root, which replaces the entire document including html and body tags."
+---
+
+Every application encounters two types of failure: resources that do not exist, and things that go wrong unexpectedly. Next.js gives you dedicated tools for each case, and it is worth understanding why they are separate — because they communicate very different things to the user.
+
+## Two Types of Failure
+
+When a user visits `/blog/a-post-that-never-existed`, nothing has gone wrong technically. The server is healthy, the code is working, the resource simply is not there. This is an **expected failure**, and the right response is a clean 404 page.
+
+When a database crashes mid-request or a rendering bug throws an unhandled exception, that is an **unexpected failure**. The server encountered something it did not anticipate. This deserves a different response — one that offers the user a way to retry.
+
+Next.js handles these with two different files: `not-found.tsx` and `error.tsx`.
+
+## not-found.tsx — For Missing Resources
+
+Create a `not-found.tsx` file next to any route segment to define a custom 404 page for that part of the app. To trigger it, import and call `notFound()` from `next/navigation` inside your page:
+
+```tsx
+// app/blog/[slug]/page.tsx
+import { notFound } from 'next/navigation'
+
+export default async function BlogPost({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = await getPost(slug)
+
+  if (!post) notFound() // triggers not-found.tsx for this route segment
+
+  return <article>{post.title}</article>
+}
+```
+
+```tsx
+// app/blog/not-found.tsx — shown when notFound() is called inside /blog routes
+import Link from 'next/link'
+
+export default function BlogNotFound() {
+  return (
+    <div className="text-center py-16">
+      <h1 className="text-4xl font-bold mb-4">Post not found</h1>
+      <p className="text-zinc-500 mb-8">
+        The post you are looking for does not exist or has been removed.
+      </p>
+      <Link href="/blog" className="text-blue-600 hover:underline">
+        ← Back to all posts
+      </Link>
+    </div>
+  )
+}
+```
+
+A few things worth knowing about `notFound()`:
+
+- It **throws internally** — code after the `notFound()` call never executes. You do not need a `return` statement after it.
+- The `not-found.tsx` in `app/blog/` only covers URLs within the `/blog` segment.
+- The root `app/not-found.tsx` is the fallback for any URL in your entire app that does not match a route.
+
+## error.tsx — For Unexpected Errors
+
+`error.tsx` is a React Error Boundary. It catches runtime errors thrown during rendering in its route segment and displays a fallback UI instead of crashing the whole page.
+
+**Important:** `error.tsx` must always be a Client Component. Add `'use client'` at the top. This is a hard requirement — React Error Boundaries are a client-side React feature. Next.js will give you a build-time error if you forget it.
+
+```tsx
+// app/blog/error.tsx
+'use client' // error boundaries must be Client Components
+
+export default function BlogError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void // calling reset() attempts to re-render the failed segment
+}) {
+  return (
+    <div className="text-center py-16">
+      <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
+      <p className="text-zinc-500 mb-6">
+        An error occurred while loading this page.
+      </p>
+      <button
+        onClick={reset}
+        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+```
+
+### The reset and error props
+
+The component receives two props:
+
+- **`reset`** — a function that attempts to re-render the failed route segment. This is useful for transient errors like a network timeout: the user clicks "Try again" and the page re-fetches.
+- **`error`** — the caught Error object. It includes an optional `error.digest` property, which is a hash you can match against your server logs to find the full error details in production.
+
+Why not just show `error.message` in the UI? In production, Next.js **redacts** server-side error messages to prevent leaking sensitive information (database connection strings, file paths, internal logic). Always show a generic message to the user and use `error.digest` to correlate with server logs.
+
+## global-error.tsx — For Errors in the Root Layout
+
+Here is a subtle but important point: `error.tsx` in `app/blog/` catches errors in the blog page, but NOT in its sibling `app/blog/layout.tsx`. An error boundary wraps the content below it, not the layout alongside it.
+
+This same rule applies at the root: `app/error.tsx` does not catch errors in `app/layout.tsx`. For that, you need `app/global-error.tsx`. Because it replaces the entire document when triggered, it must include its own `<html>` and `<body>` tags:
+
+```tsx
+// app/global-error.tsx
+'use client'
+
+export default function GlobalError({ reset }: { reset: () => void }) {
+  return (
+    <html>
+      <body>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
+            <button
+              onClick={reset}
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </body>
+    </html>
+  )
+}
+```
+
+`global-error.tsx` is a last resort. Most applications only need it if the root layout itself can fail (for example, if it fetches data).
+
+## Which File to Use When
+
+| Situation | File to use |
+|---|---|
+| User navigated to a URL with no matching resource (404) | `notFound()` + `not-found.tsx` |
+| Runtime error during rendering (database crash, bug) | `error.tsx` |
+| Error thrown inside the root `app/layout.tsx` | `global-error.tsx` |
+
+## Error Boundary Scope
+
+One more thing to internalize: an `error.tsx` covers errors in the **page and its children** within that segment. It does NOT cover its own sibling layout. This is intentional — the layout stays visible so the user can still navigate elsewhere. If the entire segment including the layout blew up, the user would have no way out.
+
+## Common Mistakes
+
+**Forgetting `'use client'` on `error.tsx`**: Next.js will fail the build. Error boundaries are a client-only React feature, always mark the file.
+
+**Using `error.tsx` for 404s**: If you throw a generic error instead of calling `notFound()`, the user sees a 500-style error page and search engines index it as a server error rather than a missing page.
+
+**Displaying `error.message` in production UI**: Server Component errors are redacted in production for security. Always show a generic message to users, and use `error.digest` to cross-reference your server logs.
+
+**Expecting `error.tsx` to catch layout errors**: Remember that error boundaries wrap the content below, not alongside. An `error.tsx` in `/app/dashboard/` does not protect `app/dashboard/layout.tsx`.
+
+## Key Takeaways
+
+- Next.js separates error handling into two distinct patterns: expected failures (missing resources) and unexpected failures (runtime errors).
+- Call `notFound()` from a page when a resource does not exist; place `not-found.tsx` in the same directory to define the 404 UI.
+- `error.tsx` is a React Error Boundary and must be marked `'use client'` — this is non-negotiable.
+- The `reset` prop in `error.tsx` lets users attempt to retry the failed render without a full page reload.
+- Never show raw `error.message` in production UI — use `error.digest` to correlate with server logs instead.
+- `error.tsx` does not catch errors in its sibling layout; use `global-error.tsx` at the app root for layout-level failures.
+- Place `not-found.tsx` close to the route it covers for scoped 404 pages; the root `app/not-found.tsx` is the global fallback.

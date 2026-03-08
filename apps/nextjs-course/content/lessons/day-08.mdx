@@ -1,0 +1,223 @@
+---
+title: "Navigation: Link, useRouter, and usePathname"
+day: 8
+description: "Learn how to navigate between pages in Next.js using the Link component, programmatic routing with useRouter, and active link detection with usePathname."
+quiz:
+  - question: "Why should you use Next.js's <Link> component instead of a plain <a> tag for internal navigation?"
+    options:
+      - "Because <a> tags don't support TypeScript"
+      - "Because <Link> performs client-side navigation without a full page reload, keeping shared layout state and scroll position intact"
+      - "Because <a> tags are not valid HTML inside React components"
+    correct: 1
+    explanation: "A plain <a> tag causes the browser to do a full page reload — it discards all JavaScript state, re-fetches everything, and re-renders from scratch. The <Link> component uses React's client-side navigation, swapping only the page content while keeping the shared layout, scroll position, and any in-memory state intact. <a> tags are perfectly valid HTML and TypeScript supports them fine — the reason is purely about the navigation experience."
+  - question: "In the Next.js App Router, where do you import usePathname and useRouter from?"
+    options:
+      - "next/router"
+      - "react-router-dom"
+      - "next/navigation"
+    correct: 2
+    explanation: "In the App Router (introduced in Next.js 13), both usePathname and useRouter come from 'next/navigation'. The 'next/router' package is the older Pages Router API and will not work correctly in App Router projects — this is one of the most common copy-paste mistakes when following older tutorials. 'react-router-dom' is a completely separate library not used in Next.js projects."
+  - question: "What does router.refresh() do?"
+    options:
+      - "It reloads the entire browser page, the same as window.location.reload()"
+      - "It clears all client-side state and resets the React component tree"
+      - "It re-fetches data for Server Components on the current page without discarding existing client-side state"
+    correct: 2
+    explanation: "router.refresh() tells Next.js to re-run the Server Components on the current page and merge the fresh data into the existing React tree. Crucially, it does NOT cause a full browser reload and it does NOT reset client-side state (like form inputs or open/closed UI state). This makes it useful after a mutation — for example, after submitting a form that changes data on the server, you call router.refresh() to get the updated server-rendered content without losing anything the user was doing on the client."
+---
+
+Every app has more than one page. This lesson covers everything you need to move users around your Next.js app: the `<Link>` component for clickable navigation, `usePathname` for highlighting the active link, and `useRouter` for navigating programmatically after events like form submissions.
+
+## Why Not Just Use `<a>` Tags?
+
+If you know HTML, your first instinct might be to reach for a plain anchor tag for internal links. In Next.js, that works — but it causes a **full page reload**. The browser discards the current page, makes a network request, downloads the new page, and builds the React tree from scratch.
+
+This has real consequences:
+
+- Any shared layout state resets (open menus, scroll positions, theme toggles)
+- The user sees a flash of white while the page loads
+- It feels slow compared to modern single-page apps
+
+The `<Link>` component solves this. It performs **client-side navigation**: React swaps out only the page content, leaving the shared layout untouched.
+
+```tsx
+import Link from 'next/link'
+
+// WRONG for internal links — triggers a full page reload
+<a href="/about">About</a>
+
+// CORRECT — fast client-side navigation
+<Link href="/about">About</Link>
+```
+
+The good news: `<Link>` renders as a real `<a>` tag in the browser's HTML. That means keyboard navigation, right-click → "Open in new tab", browser history, and screen readers all work exactly as expected. You get the best of both worlds.
+
+> **One common mistake from older tutorials**: In Next.js 13 and later, you do **not** need to put a child `<a>` tag inside `<Link>`. Next.js renders the anchor automatically. Writing `<Link href="/about"><a>About</a></Link>` will produce a nested `<a>` inside another `<a>`, which is invalid HTML.
+
+## Useful Link Props
+
+`<Link>` accepts a few props worth knowing:
+
+```tsx
+// Replace the current history entry instead of pushing a new one.
+// The user cannot press the browser's Back button to return to this page.
+<Link href="/checkout" replace>
+  Proceed to Checkout
+</Link>
+```
+
+For **external links** (URLs outside your site), use a plain `<a>` tag. External sites are always full navigations, and you typically want to open them in a new tab:
+
+```tsx
+// External link — use a plain <a>, not <Link>
+<a href="https://nextjs.org" target="_blank" rel="noopener noreferrer">
+  Next.js Docs
+</a>
+```
+
+The `rel="noopener noreferrer"` attribute is a security best practice when using `target="_blank"`.
+
+## Prefetching: Free Performance
+
+In production builds, Next.js automatically **prefetches** the destination page whenever a `<Link>` scrolls into the user's viewport. By the time the user clicks, the page data is already downloaded. Navigation feels nearly instant.
+
+This happens with zero configuration on your part — it is simply the default behavior of `<Link>` in production mode. (In development mode, prefetching is disabled so you always get fresh data while building.)
+
+## Active Link Styling with usePathname
+
+A navigation bar usually highlights the link for the page the user is currently on. `<Link>` does not have a built-in "active" state, but Next.js provides the `usePathname` hook for exactly this purpose.
+
+Because `usePathname` reads browser state, it can only run on the client. You must mark any component that uses it with the `'use client'` directive at the top of the file.
+
+```tsx
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/about', label: 'About' },
+  { href: '/blog', label: 'Blog' },
+]
+
+export function Navigation() {
+  const pathname = usePathname()
+
+  return (
+    <nav className="flex gap-4">
+      {navLinks.map(link => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className={
+            pathname === link.href
+              ? 'font-bold underline'
+              : 'text-gray-600 hover:text-gray-900'
+          }
+        >
+          {link.label}
+        </Link>
+      ))}
+    </nav>
+  )
+}
+```
+
+A few things to note here:
+
+- `usePathname` returns the **path only** — for example `/about` — without the query string. So even if the URL is `/about?tab=team`, `pathname` is still `/about`.
+- The comparison `pathname === link.href` is a simple string equality check. For nested routes (like highlighting `/blog` when on `/blog/my-post`), you would use `pathname.startsWith(link.href)` instead.
+
+## Programmatic Navigation with useRouter
+
+Sometimes you need to navigate in response to something other than a direct click on a link. The most common example is redirecting a user after a form submission or after a login succeeds.
+
+For this, use the `useRouter` hook:
+
+```tsx
+'use client'
+
+import { useRouter } from 'next/navigation'
+
+export function LoginForm() {
+  const router = useRouter()
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+    await performLogin(formData)
+
+    // Navigate to the dashboard after successful login
+    router.push('/dashboard')
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="email" type="email" placeholder="Email" />
+      <input name="password" type="password" placeholder="Password" />
+      <button type="submit">Log in</button>
+    </form>
+  )
+}
+```
+
+### The router Methods
+
+`router.push(href)` is the most common method, but there are others:
+
+```tsx
+router.push('/dashboard')      // Navigate forward (adds to browser history)
+router.replace('/dashboard')   // Navigate without adding to history (user can't go back)
+router.back()                  // Go to the previous page in history
+router.refresh()               // Re-fetch server data for the current page
+router.prefetch('/dashboard')  // Manually prefetch a page before the user navigates
+```
+
+`router.refresh()` deserves a special mention. It re-runs the Server Components on the current page and merges the new data into the existing React tree — **without** resetting any client-side state. This is useful after a data mutation: you updated something on the server, and now you want the displayed data to reflect that change, without losing what the user was doing (a partially filled form, an open dropdown, etc.).
+
+### The Import to Remember
+
+`useRouter` must be imported from `next/navigation`, **not** from `next/router`.
+
+```tsx
+// CORRECT — App Router
+import { useRouter } from 'next/navigation'
+
+// WRONG — this is the old Pages Router API
+import { useRouter } from 'next/router'
+```
+
+The old `next/router` package still exists for backward compatibility with the Pages Router, but importing it in an App Router project will cause errors or silent failures. Double-check this import whenever you copy code from older tutorials.
+
+## When to Use Link vs useRouter
+
+Both tools navigate the user, but they suit different situations:
+
+| Situation | Tool |
+|---|---|
+| Menu links, "Read more" buttons, breadcrumbs | `<Link>` |
+| After a form submission or async operation | `router.push()` |
+| Navigation that should not be in browser history | `<Link replace>` or `router.replace()` |
+| Highlight the current page in a nav bar | `usePathname` |
+| Prefetch a page the user is likely to visit | `router.prefetch()` |
+
+The general rule: if there is a visible link the user can click, use `<Link>`. If you are navigating in response to an event (submit, success, timer), use `useRouter`.
+
+## Server Components Cannot Use These Hooks
+
+Both `usePathname` and `useRouter` are React hooks, and hooks can only run in Client Components. Server Components (covered in Day 10) run on the server during the build or request — they have no access to browser APIs like the current URL or navigation history.
+
+If you try to use either hook in a file without `'use client'`, Next.js will throw an error at build time. The fix is always to add `'use client'` to the top of the file.
+
+## Key Takeaways
+
+- Use `<Link href="...">` for all internal navigation — it is faster than `<a>` because it avoids full page reloads
+- `<Link>` in Next.js 13+ does not need a child `<a>` tag — it renders one automatically
+- In production, `<Link>` prefetches destination pages when they scroll into view
+- Use `usePathname` to detect the current URL for active link styling
+- Use `useRouter` for programmatic navigation (after form submissions, login, etc.)
+- Both hooks are imported from `next/navigation` — not `next/router`
+- `router.refresh()` re-fetches server data without resetting client state
+- Both hooks require `'use client'` — they cannot be used in Server Components

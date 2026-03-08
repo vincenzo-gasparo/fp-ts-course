@@ -1,0 +1,282 @@
+---
+title: "Metadata and SEO"
+day: 13
+description: "Control page titles, descriptions, and social sharing previews using Next.js's built-in Metadata API."
+quiz:
+  - question: "In a root layout that sets title.template: '%s | My Site', what does a child page need to export to produce the title 'About | My Site'?"
+    options:
+      - "export const metadata = { title: { absolute: 'About | My Site' } }"
+      - "export const metadata = { title: 'About' }"
+      - "No export needed — the template applies automatically to every page"
+    correct: 1
+    explanation: "The title template in the root layout defines the pattern. The %s placeholder is replaced by whatever title the child page exports. So exporting { title: 'About' } from the child page produces 'About | My Site'. Using title.absolute would bypass the template entirely and output the string exactly as written. Exporting nothing would show the default value defined in the root layout's metadata."
+  - question: "Why must Open Graph image URLs be absolute URLs (including the domain) rather than relative paths like /og-image.jpg?"
+    options:
+      - "Because relative URLs do not work in HTML meta tags at all"
+      - "Because social media crawlers fetch the image directly using the URL in the meta tag, and they have no context for what domain a relative path refers to"
+      - "Because Next.js does not allow relative URLs in the openGraph field"
+    correct: 1
+    explanation: "When Twitter, LinkedIn, or Slack reads your page's Open Graph tags to generate a link preview, their crawlers see the raw value in the meta tag. A relative path like /og-image.jpg is meaningless to an external crawler — it has no base URL to resolve it against. The URL must be fully qualified so the crawler knows exactly where to fetch the image from. You can use metadataBase in your root layout to avoid repeating the domain everywhere."
+  - question: "A root layout sets openGraph: { title: 'My Site', description: 'Great content' }. A child page sets openGraph: { title: 'Blog' }. What is the final openGraph.description on the blog page?"
+    options:
+      - "'Great content' — the child inherits fields it does not override"
+      - "undefined — the child's openGraph object completely replaces the parent's"
+      - "An error is thrown because the description field is required"
+    correct: 1
+    explanation: "Metadata merging in Next.js is shallow. When a child page sets openGraph, the entire openGraph object from the parent is replaced — not merged field by field. The child's { title: 'Blog' } becomes the complete openGraph object, so description ends up undefined. To avoid losing shared fields, either repeat the shared values in the child or extract them into a shared module and spread them: { ...sharedOG, title: 'Blog' }."
+---
+
+When your page appears in a Google search, the user sees a title and a short description before they ever click. When someone pastes your link into Slack or Twitter, a preview card appears with an image and summary. All of this is driven by HTML `<meta>` tags in the document `<head>`. Next.js manages those tags automatically through its Metadata API — you never have to write `<head>` tags by hand.
+
+## Why Metadata Matters
+
+Good metadata does two things. First, it helps search engines understand what your page is about and rank it appropriately. Second, it controls how your pages look when shared on social platforms. A page without proper Open Graph tags will appear as a bare URL with no image, no description, and often a generic title — which dramatically reduces click-through rates.
+
+Next.js generates all the necessary HTML `<meta>` tags from a simple JavaScript object you export from your layout or page files.
+
+## Static Metadata
+
+The simplest approach is exporting a `metadata` constant from any `layout.tsx` or `page.tsx`:
+
+```tsx
+// app/about/page.tsx
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'About Us',
+  description: 'Learn about our team and mission.',
+}
+
+export default function AboutPage() {
+  return <h1>About Us</h1>
+}
+```
+
+Next.js reads this export at build time and generates the correct `<title>` and `<meta name="description">` tags. You do not need to touch any layout files or configure anything else.
+
+The `Metadata` type imported from `next` gives you autocompletion for all available fields — it is worth importing it even for simple cases.
+
+## Title Templates — Avoid Repeating Your Site Name
+
+If you set `title: 'About Us'` on every page, you end up either forgetting the site name entirely or duplicating it everywhere. The `title.template` pattern solves this cleanly. Define the template once in your root layout:
+
+```tsx
+// app/layout.tsx
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: {
+    template: '%s | My Awesome Site',
+    default: 'My Awesome Site', // used when no child page sets a title
+  },
+  description: 'The best site on the internet.',
+}
+```
+
+Then each page only needs to provide its own segment:
+
+```tsx
+// app/about/page.tsx
+export const metadata: Metadata = {
+  title: 'About', // renders as "About | My Awesome Site"
+}
+
+// app/contact/page.tsx
+export const metadata: Metadata = {
+  title: 'Contact', // renders as "Contact | My Awesome Site"
+}
+```
+
+The `%s` placeholder is replaced by whatever the child page exports as its title. The `default` value kicks in on any page that does not export a title at all.
+
+### Bypassing the Template
+
+Sometimes you need a page title that does not follow the pattern — a landing page or a special campaign page. Use `title.absolute` to opt out of the template entirely:
+
+```tsx
+export const metadata: Metadata = {
+  title: { absolute: 'Summer Sale — 50% Off Everything' },
+  // outputs exactly "Summer Sale — 50% Off Everything"
+}
+```
+
+## Dynamic Metadata with generateMetadata
+
+When the page title depends on fetched data — for example, a blog post's title — you cannot use a static export. Instead, export an async `generateMetadata` function from your page:
+
+```tsx
+// app/blog/[slug]/page.tsx
+import type { Metadata } from 'next'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const post = await getPost(slug)
+
+  if (!post) {
+    return { title: 'Post Not Found' }
+  }
+
+  return {
+    title: post.title,
+    description: post.excerpt,
+  }
+}
+
+export default async function BlogPost({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = await getPost(slug)
+  if (!post) notFound()
+  return <article>{post.title}</article>
+}
+```
+
+Next.js calls `generateMetadata` before rendering the page. If you notice that `getPost(slug)` is called twice — once in `generateMetadata` and once in the page — do not worry. Next.js automatically deduplicates `fetch` calls with the same URL within a single render, so the actual network request only happens once.
+
+## Open Graph — Controlling Social Sharing Previews
+
+Open Graph is a protocol originally created by Facebook that is now supported by virtually every social platform. When a crawler reads your page to generate a link preview, it looks for `og:title`, `og:description`, `og:image`, and related tags.
+
+```tsx
+// app/blog/[slug]/page.tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const post = await getPost(slug)
+
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      url: `https://mysite.com/blog/${slug}`,
+      images: [
+        {
+          url: 'https://mysite.com/og-image.jpg',
+          width: 1200,
+          height: 630,
+          alt: 'Blog post preview image',
+        },
+      ],
+      type: 'article',
+    },
+  }
+}
+```
+
+### Image URLs Must Be Absolute
+
+Open Graph image URLs must include the full domain (`https://mysite.com/og-image.jpg`), not just the path (`/og-image.jpg`). The reason: social media crawlers fetch the image directly using the URL they find in the meta tag. They have no context for your domain — a relative path is meaningless to them.
+
+Repeating `https://mysite.com` everywhere is tedious. Use `metadataBase` in the root layout to set it once:
+
+```tsx
+// app/layout.tsx
+export const metadata: Metadata = {
+  metadataBase: new URL('https://mysite.com'),
+  openGraph: {
+    images: '/og-image.jpg', // automatically becomes https://mysite.com/og-image.jpg
+  },
+}
+```
+
+With `metadataBase` set, Next.js automatically prepends your domain to any relative URL in metadata fields that require absolute URLs.
+
+## The Shallow Merge Gotcha
+
+This is the most common metadata mistake in Next.js apps. Metadata from parent layouts and child pages is **shallowly merged** — meaning top-level fields are combined, but nested objects are completely replaced.
+
+Here is what goes wrong:
+
+```tsx
+// app/layout.tsx
+export const metadata: Metadata = {
+  openGraph: {
+    title: 'My Site',
+    description: 'Great content here',
+    images: ['/og-image.jpg'],
+  },
+}
+
+// app/blog/page.tsx
+export const metadata: Metadata = {
+  openGraph: {
+    title: 'Blog',
+    // description and images are NOT inherited — the whole openGraph is replaced
+  },
+}
+// Final openGraph: { title: 'Blog' }
+// description and images are both gone
+```
+
+Because `openGraph` is a nested object, the child's value replaces the parent's entirely rather than merging field by field. The description and images you set in the root layout silently disappear on the blog page.
+
+The fix is to extract shared values and spread them:
+
+```tsx
+// lib/metadata.ts
+export const sharedOpenGraph = {
+  description: 'Great content here',
+  images: [{ url: '/og-image.jpg', width: 1200, height: 630 }],
+}
+
+// app/blog/page.tsx
+import { sharedOpenGraph } from '@/lib/metadata'
+
+export const metadata: Metadata = {
+  openGraph: {
+    ...sharedOpenGraph,
+    title: 'Blog', // overrides only the title, keeps description and images
+  },
+}
+```
+
+## Other Useful Metadata Fields
+
+The Metadata API covers more than just titles and Open Graph. A few other fields you will use regularly:
+
+```tsx
+export const metadata: Metadata = {
+  // Control search engine indexing
+  robots: {
+    index: true,
+    follow: true,
+  },
+
+  // Favicon and Apple touch icons
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-icon.png',
+  },
+
+  // Canonical URL — tells search engines the authoritative URL for this content
+  // Useful when the same content is accessible at multiple URLs
+  alternates: {
+    canonical: 'https://mysite.com/about',
+  },
+}
+```
+
+The `canonical` URL is particularly important if your content appears at multiple URLs (for example, with and without trailing slashes, or on both `www` and non-`www` domains). It tells search engines which URL to treat as the definitive one, preventing duplicate content penalties.
+
+## Key Takeaways
+
+- Export a `metadata` constant from any `layout.tsx` or `page.tsx` to define that route's SEO metadata — Next.js generates the HTML tags automatically.
+- Use `title.template` in the root layout with a `%s` placeholder to automatically append your site name to every page title without repeating it.
+- The `default` value in `title` is shown on pages that do not export their own title.
+- Export `generateMetadata` (async function) when the metadata depends on fetched data, such as a blog post title.
+- Open Graph tags control how your pages appear when shared on social platforms — always provide `openGraph.title`, `openGraph.description`, and `openGraph.images`.
+- Open Graph image URLs must be absolute. Use `metadataBase` in the root layout to avoid repeating the domain everywhere.
+- Metadata merging is shallow — a child page that sets `openGraph` replaces the entire parent `openGraph` object. Extract shared fields into a module and spread them to avoid losing values.
+- `title.absolute` bypasses the template and renders the title exactly as written.

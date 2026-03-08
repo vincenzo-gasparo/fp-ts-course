@@ -1,0 +1,303 @@
+---
+title: "Event Handling and Forms"
+day: 5
+description: "Learn how to respond to user actions with event handlers, build controlled form inputs, and handle form submission correctly in React."
+quiz:
+  - question: "What is the difference between onClick={handleClick} and onClick={handleClick()}?"
+    options:
+      - "They are equivalent — React normalizes both forms internally."
+      - "onClick={handleClick} passes the function as a reference to be called on click; onClick={handleClick()} calls the function immediately during render and passes its return value as the handler."
+      - "onClick={handleClick()} is the correct form; the version without parentheses does nothing when clicked."
+    correct: 1
+    explanation: "onClick expects a function — something React can call later when the click happens. Writing onClick={handleClick} hands React a reference to the function, which is correct. Writing onClick={handleClick()} calls the function right now, during rendering, and gives React whatever that function returns (likely undefined) as the handler. This means your logic runs on every render instead of on click, and nothing happens when the user actually clicks. Always pass the reference, never call the function directly in the prop."
+  - question: "Why do you need to call e.preventDefault() when handling form submission?"
+    options:
+      - "It stops React from re-rendering the component after the form is submitted."
+      - "It prevents the browser's default form behavior, which is to serialize the form data and reload the page with it appended to the URL."
+      - "It is required by TypeScript — without it, the type of e does not include the form fields."
+    correct: 1
+    explanation: "HTML forms have a native browser behavior: when submitted, the browser serializes the form fields and either reloads the current page (for GET) or sends a request and reloads (for POST). In a React app you want to handle the submission yourself — validate data, call an API, show a success message — without a page reload that would reset all state. e.preventDefault() cancels the browser's default action so you stay in control. Without it, the page reloads the moment the user clicks Submit and all your React state is lost."
+  - question: "For a checkbox input, which property do you read from the event to get the current value?"
+    options:
+      - "e.target.value, the same as for text inputs."
+      - "e.target.checked, a boolean that is true when the box is ticked and false when it is not."
+      - "e.target.selected, which mirrors the checked attribute on the DOM element."
+    correct: 1
+    explanation: "Text inputs, textareas, and selects all use e.target.value, which is always a string. Checkboxes are different: their relevant property is e.target.checked, a boolean. This matches the HTML attribute — a checkbox is either checked or not, it does not have a meaningful string value for this purpose. Mixing them up is a common mistake: reading e.target.value from a checkbox gives you 'on' regardless of whether the box is ticked, which is almost never what you want."
+---
+
+You have learned how to describe UI with components and how to store changing values with state. The missing piece is interaction — responding when the user clicks a button, types in an input, or submits a form. This lesson covers event handling in React and the controlled input pattern that keeps your form data in sync with state.
+
+## Handling Events
+
+In the browser, events fire when the user interacts with the page: a click, a keypress, a form submission. React lets you respond to these events by passing a function to an event prop like `onClick` or `onChange`.
+
+```tsx
+function Button() {
+  function handleClick() {
+    alert('Button clicked!')
+  }
+
+  return <button onClick={handleClick}>Click me</button>
+}
+```
+
+The function `handleClick` is passed as a reference — React holds on to it and calls it when the button is clicked.
+
+### The Most Common Beginner Mistake
+
+```tsx
+// CORRECT — passes a reference; React calls it on click
+<button onClick={handleClick}>Click me</button>
+
+// WRONG — calls the function immediately during render
+<button onClick={handleClick()}>Click me</button>
+```
+
+The difference is the parentheses. `handleClick` is a reference to the function. `handleClick()` calls it right now and passes the return value (probably `undefined`) to `onClick`. Your logic runs on every render and nothing happens when the user clicks.
+
+The rule: **pass the function, never call it** in the prop.
+
+## Inline Arrow Functions
+
+For short, one-line handlers, writing an inline arrow function is perfectly fine:
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={() => setCount(count + 1)}>+</button>
+      <button onClick={() => setCount(count - 1)}>-</button>
+    </div>
+  )
+}
+```
+
+The arrow function `() => setCount(count + 1)` is itself a function reference. React calls it on click, and only then does `setCount` run. This is correct.
+
+For more complex logic, define a named function instead — it keeps your JSX readable:
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0)
+
+  function handleIncrement() {
+    if (count < 10) {
+      setCount(count + 1)
+    }
+  }
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={handleIncrement}>+</button>
+    </div>
+  )
+}
+```
+
+## Passing Arguments to Handlers
+
+Sometimes your handler needs extra information — for example, which item in a list was clicked. Wrap the call in an arrow function to pass arguments:
+
+```tsx
+function TodoList() {
+  const [todos, setTodos] = useState([
+    { id: 1, text: 'Buy milk' },
+    { id: 2, text: 'Write report' },
+  ])
+
+  function handleDelete(itemId: number) {
+    setTodos(todos.filter(t => t.id !== itemId))
+  }
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>
+          {todo.text}
+          <button onClick={() => handleDelete(todo.id)}>Delete</button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+`() => handleDelete(todo.id)` creates a new function that, when called, invokes `handleDelete` with the correct `id`. Without the wrapper, you would have to write `handleDelete(todo.id)` — which calls it immediately during render.
+
+## The Event Object
+
+Event handlers receive an event object as their first argument. It contains details about what happened: what the user typed, which key was pressed, which element was involved.
+
+```tsx
+function SearchInput() {
+  const [query, setQuery] = useState('')
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    console.log(e.target.value) // the current value of the input
+    setQuery(e.target.value)
+  }
+
+  return (
+    <input
+      value={query}
+      onChange={handleChange}
+      placeholder="Search..."
+    />
+  )
+}
+```
+
+`e.target` is the DOM element that fired the event. `e.target.value` is its current string value.
+
+One thing to know: `e.target.value` is always a string, even for `<input type="number">`. If you need a number, convert it explicitly:
+
+```tsx
+function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  const numericValue = Number(e.target.value)
+  setQuantity(numericValue)
+}
+```
+
+TypeScript and the React type definitions will guide you to the right event type. For `<input>` it is `React.ChangeEvent<HTMLInputElement>`, for `<textarea>` it is `React.ChangeEvent<HTMLTextAreaElement>`, and so on.
+
+## Controlled Inputs
+
+In a plain HTML page, a form input stores its own value internally in the DOM. You read it out with JavaScript when you need it. React takes a different approach called **controlled inputs**: React state holds the value, and the input displays whatever state says.
+
+The pattern has two parts:
+1. Set `value` on the input to a state variable.
+2. Update state with `onChange` every time the user types.
+
+```tsx
+function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+
+  return (
+    <form>
+      <input
+        type="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        placeholder="Email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        placeholder="Password"
+      />
+    </form>
+  )
+}
+```
+
+Because `email` and `password` live in state, you always know exactly what the user has typed. You can validate on every keystroke, enable a button only when both fields are non-empty, or prefill the form from saved data — all without touching the DOM directly.
+
+If you forget the `onChange` handler and only supply `value`, the input becomes read-only. React will warn you about this in development.
+
+## Form Submission
+
+Forms in React are submitted with an `onSubmit` handler on the `<form>` element. The first thing that handler must do is call `e.preventDefault()`:
+
+```tsx
+function ContactForm() {
+  const [name, setName] = useState('')
+  const [message, setMessage] = useState('')
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault() // stop the browser from reloading the page
+
+    console.log({ name, message })
+    // send data to an API, show a success message, clear the form, etc.
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="Your name"
+      />
+      <textarea
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        placeholder="Your message"
+      />
+      <button type="submit">Send</button>
+    </form>
+  )
+}
+```
+
+Without `e.preventDefault()`, the browser fires its native form submission: it reloads the page (or navigates away), and all your React state is wiped. With it, you stay in control of what happens next.
+
+Because all the data is already in state (`name` and `message`), you can read it directly in `handleSubmit` — no need to query the DOM or read from form field references.
+
+## Checkboxes and Selects
+
+Checkboxes work slightly differently from text inputs. Instead of `value`, you use `checked` (a boolean), and instead of `e.target.value`, you read `e.target.checked`:
+
+```tsx
+function TermsCheckbox() {
+  const [agreed, setAgreed] = useState(false)
+
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={agreed}
+        onChange={e => setAgreed(e.target.checked)} // .checked, not .value
+      />
+      I agree to the terms
+    </label>
+  )
+}
+```
+
+Select elements use the same `value` / `onChange` pattern as text inputs. Set `value` to the currently selected option:
+
+```tsx
+function CountrySelect() {
+  const [country, setCountry] = useState('us')
+
+  return (
+    <select value={country} onChange={e => setCountry(e.target.value)}>
+      <option value="us">United States</option>
+      <option value="uk">United Kingdom</option>
+      <option value="de">Germany</option>
+    </select>
+  )
+}
+```
+
+React highlights the matching `<option>` automatically based on the `value` prop.
+
+## Common Event Props
+
+Here is a quick reference for the most frequently used React event props:
+
+- `onClick` — buttons, links, any clickable element
+- `onChange` — text inputs, textareas, selects, checkboxes
+- `onSubmit` — forms
+- `onFocus` / `onBlur` — fires when an element gains or loses focus
+- `onKeyDown` / `onKeyUp` — keyboard events (check `e.key` for which key)
+- `onMouseEnter` / `onMouseLeave` — hover effects
+
+All of them follow the same pattern: pass a function reference, optionally use the event object for details.
+
+## Key Takeaways
+
+- Pass a function reference to event props — `onClick={handleClick}` — never call the function in the prop (`onClick={handleClick()}` runs immediately during render).
+- Use inline arrow functions when you need to pass arguments: `onClick={() => handleDelete(id)}`.
+- The event object `e` carries details like `e.target.value` (current text input value) and `e.target.checked` (checkbox state).
+- `e.target.value` is always a string. Convert to a number with `Number()` when needed.
+- Controlled inputs keep form data in React state: set `value` to a state variable and update state in `onChange`.
+- Always call `e.preventDefault()` in your `onSubmit` handler to prevent the browser from reloading the page.
+- Checkboxes use `checked` and `e.target.checked`; text inputs and selects use `value` and `e.target.value`.
+- Because controlled inputs store data in state, you can read values directly from state variables at submit time — no DOM querying required.

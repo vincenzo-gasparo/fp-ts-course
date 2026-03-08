@@ -1,0 +1,188 @@
+---
+title: "Before You Start: HTML, JavaScript, and the Web"
+day: 0
+description: "Understand how the browser works, why JavaScript frameworks exist, and what prerequisite knowledge you need before diving into React and Next.js."
+quiz:
+  - question: "What problem do JavaScript frameworks like React primarily solve?"
+    options:
+      - "They make websites load faster by compressing images automatically."
+      - "They let you describe what the UI should look like for a given state and handle DOM updates automatically."
+      - "They replace HTML and CSS so you only need to write JavaScript."
+    correct: 1
+    explanation: "Frameworks like React solve the DOM synchronization problem. As an app grows, manually finding DOM elements and updating them every time data changes becomes error-prone and hard to maintain. React lets you describe the desired UI for a given state, and it figures out the minimum DOM updates needed — you stop writing imperative update code and start writing declarative UI descriptions. Option A is unrelated to why frameworks exist, and Option C is wrong because React works alongside HTML and CSS, not instead of them."
+  - question: "Which of the following is a valid arrow function in JavaScript?"
+    options:
+      - "function = (x) => { return x * 2 }"
+      - "const double = (x) => x * 2"
+      - "arrow double(x) { return x * 2 }"
+    correct: 1
+    explanation: "Arrow functions use the syntax `const name = (params) => expression`. When the function body is a single expression, you can omit the curly braces and the `return` keyword — the expression is returned implicitly. Option A uses `function =` which is not valid syntax. Option C invents a keyword called `arrow` that does not exist in JavaScript. Arrow functions are important to understand before React because they are used constantly for callbacks, event handlers, and array methods like map and filter."
+  - question: "What is the relationship between React and Next.js?"
+    options:
+      - "Next.js and React are two names for the same library."
+      - "React is built on top of Next.js and needs it to run."
+      - "React is the UI library; Next.js is a framework built on top of React that adds routing, server-rendering, and deployment tools."
+    correct: 2
+    explanation: "React is a focused JavaScript library for building user interfaces. It handles rendering components and updating the DOM when data changes, but it does not make decisions about routing or how your app is structured. Next.js is a full framework that uses React for its UI layer and adds opinionated solutions for file-based routing, server-side rendering, static site generation, and optimized deployments. You can use React without Next.js, but you cannot use Next.js without React. In this course, you will learn React fundamentals first, then layer in Next.js-specific features."
+---
+
+If you know how to write a basic HTML page, style it with CSS, and add simple interactivity with JavaScript, you are in the right place. This lesson is not going to teach you those things — instead, it will help you understand *why* tools like React and Next.js exist and what JavaScript knowledge you need to feel comfortable as the course progresses.
+
+## How the Browser Works
+
+When you open a webpage, the browser follows a predictable sequence of steps:
+
+1. It downloads the HTML file and parses it into a tree of elements called the **DOM** (Document Object Model). The DOM is a live representation of the page that JavaScript can read and modify.
+2. It downloads and applies CSS, which styles the elements in the DOM.
+3. It downloads and executes JavaScript, which can respond to user actions and manipulate the DOM.
+
+This pipeline is important to keep in mind. When you click a button and something on the page changes — a menu appears, a counter increments, a list item is added — that change is JavaScript modifying the DOM.
+
+## The DOM Synchronization Problem
+
+For simple pages, manipulating the DOM directly with JavaScript is fine. But as applications grow in complexity, this approach breaks down quickly.
+
+Imagine you are building a simple task counter. You have a number stored in a variable and a `<span>` on the page that should display it. Every time the user clicks "Add", you need to update both the variable *and* the DOM element:
+
+```javascript
+// The old way — keeping DOM and data in sync manually
+let count = 0
+const button = document.querySelector('#add-btn')
+const counter = document.querySelector('#count')
+
+button.addEventListener('click', () => {
+  count++
+  counter.textContent = count  // must update DOM manually every time
+})
+```
+
+This works. But now imagine the requirements grow:
+
+- A badge in the navigation bar should also show the count.
+- A progress bar should fill up as the count approaches a goal.
+- A summary section at the bottom should display total tasks added this session.
+
+Suddenly, every time `count` changes, you have a checklist of DOM elements to update manually. If you forget one, the page shows stale data. If you update them in the wrong order, you get a flash of incorrect UI. As the app grows, you spend more time managing DOM updates than solving the actual problem.
+
+This is the core problem that JavaScript frameworks exist to solve.
+
+## What a Framework Does
+
+Frameworks like React, Vue, and Angular flip the model. Instead of you writing instructions for *how* to update the DOM, you describe *what* the UI should look like for a given state. The framework handles translating that description into actual DOM operations.
+
+With React, you write something like: "when `count` is 5, the counter should show 5, the badge should show 5, and the progress bar should be 50% full." When `count` changes, React re-runs your description and automatically updates every part of the DOM that needs to change.
+
+You go from writing imperative update code ("find this element, set its text, find that element, update its width") to writing declarative UI descriptions ("given this data, the UI looks like this").
+
+## JavaScript You Need to Know
+
+Before writing React, you should be comfortable with the following JavaScript features. This is not a tutorial — it is a checklist. If any of these feel unfamiliar, spend a few minutes reviewing them before continuing.
+
+### Variables and Functions
+
+```javascript
+// Variable declarations
+const name = 'Alice'     // can't be reassigned
+let count = 0            // can be reassigned
+
+// Arrow functions
+const greet = (name) => `Hello, ${name}!`
+const double = (x) => x * 2
+
+// Arrow functions with a body (multiple statements)
+const add = (a, b) => {
+  const result = a + b
+  return result
+}
+```
+
+Arrow functions are everywhere in React. The short `(x) => x * 2` form (no curly braces, implicit return) is used constantly for array methods.
+
+### Arrays — map and filter
+
+These two methods are the most important array operations in React, used for rendering lists.
+
+```javascript
+const numbers = [1, 2, 3, 4, 5]
+
+// map: transform every item, returns a new array
+const doubled = numbers.map((n) => n * 2)
+// [2, 4, 6, 8, 10]
+
+// filter: keep only items that pass a test, returns a new array
+const evens = numbers.filter((n) => n % 2 === 0)
+// [2, 4]
+```
+
+### Objects and Destructuring
+
+```javascript
+const user = { name: 'Alice', age: 30, isAdmin: true }
+
+// Destructuring: pull values out by name
+const { name, age } = user
+console.log(name) // 'Alice'
+console.log(age)  // 30
+
+// Destructuring in function parameters
+function greetUser({ name, isAdmin }) {
+  return isAdmin ? `Welcome back, Admin ${name}` : `Hello, ${name}`
+}
+```
+
+### Template Literals
+
+```javascript
+const item = 'coffee'
+const price = 3.50
+
+// Old way
+const message = 'One ' + item + ' costs $' + price
+
+// Template literal — backtick strings with ${} for expressions
+const message2 = `One ${item} costs $${price}`
+```
+
+### Async/Await and Promises
+
+You will not need async/await right away, but later in the course you will use it to fetch data from APIs. The key concept: some operations (like network requests) take time. Async functions let you write code that waits for those operations without blocking the browser.
+
+```javascript
+// Fetch data from an API and wait for it to finish
+async function loadUser(id) {
+  const response = await fetch(`/api/users/${id}`)
+  const data = await response.json()
+  return data
+}
+```
+
+### Modules — import and export
+
+Modern JavaScript splits code across multiple files using the module system. React components are each written in their own file and imported where needed.
+
+```javascript
+// math.js
+export const add = (a, b) => a + b
+export const multiply = (a, b) => a * b
+
+// app.js
+import { add, multiply } from './math.js'
+console.log(add(2, 3)) // 5
+```
+
+## What Next.js Is (A Quick Preview)
+
+You will be hearing two names throughout this course: **React** and **Next.js**. Here is the one-sentence version of each:
+
+- **React** — a JavaScript library for building user interfaces out of reusable components.
+- **Next.js** — a framework built on top of React that adds file-based routing, server-rendering, image optimization, and everything you need to deploy a production web application.
+
+Think of React as the engine and Next.js as the car. The engine is what makes things move; the car is the full, usable thing. In this course, you will learn how the engine works first (Days 1–6), then learn how the whole car fits together (Days 7 onward).
+
+## Key Takeaways
+
+- The browser turns HTML into a DOM tree; JavaScript can manipulate that tree to create interactive UIs.
+- As apps grow, manually keeping DOM elements in sync with data becomes unmanageable — this is the problem frameworks solve.
+- React lets you describe what the UI should look like for a given state; it handles updating the DOM when the state changes.
+- Before starting React, you should be comfortable with: arrow functions, `map` and `filter`, object destructuring, template literals, async/await, and ES module imports.
+- React is the UI library; Next.js is the full framework built on top of React. You will learn them in that order.

@@ -1,0 +1,265 @@
+---
+title: "Server Components vs Client Components"
+day: 10
+description: "Learn the two kinds of components in Next.js, when to use each, and how to compose them together effectively."
+quiz:
+  - question: "What does the 'use client' directive do?"
+    options:
+      - "It tells Next.js to fetch data on the client instead of the server"
+      - "It marks a boundary — the component and everything it imports runs in the browser"
+      - "It makes the component faster by skipping server-side rendering"
+    correct: 1
+    explanation: "'use client' marks a module boundary. The component it's placed in — along with every module that component imports — will run in the browser (client). It does not affect data fetching directly, and it does not skip server-side rendering; the initial HTML is still sent from the server during the first page load."
+  - question: "Can a Server Component use useState?"
+    options:
+      - "Yes, as long as you import it from 'react'"
+      - "Yes, but only if the component is also async"
+      - "No — useState requires a browser environment, so the component must be a Client Component"
+    correct: 2
+    explanation: "useState is a React hook that depends on the browser's runtime to track state between re-renders. Server Components run only on the server (or at build time) and never in the browser, so hooks like useState, useEffect, and useReducer are unavailable. To use useState, add 'use client' at the top of the file."
+  - question: "Which composition direction is allowed in Next.js?"
+    options:
+      - "A Server Component can render a Client Component as a child"
+      - "A Client Component can import and render a Server Component"
+      - "Both directions are allowed"
+    correct: 0
+    explanation: "Server Components can render Client Components — this is the standard pattern. The reverse is not allowed: when a Client Component imports another component, that imported component is treated as a client component too (it becomes part of the client bundle). If you need to pass server-rendered content into a Client Component, pass it as a prop (e.g., as children) rather than importing it directly."
+---
+
+Every React app you've written so far has had components that run in the browser. Next.js introduces a second kind: components that run only on the server. Understanding the difference between these two types is the most important conceptual leap in modern Next.js development.
+
+This lesson will give you a clear mental model, show you what each type can and cannot do, and teach you how to combine them effectively.
+
+## The Mental Model
+
+Think of your Next.js app as having two distinct environments:
+
+- **The server** — a Node.js process that runs when you build your app (or handles requests, if you have a server runtime). It has access to databases, the filesystem, secret API keys, and any Node.js library. It produces HTML.
+- **The browser** — where your users are. It receives that HTML, displays it, and then runs JavaScript to make the page interactive.
+
+Next.js has a component type for each environment:
+
+| | Server Component | Client Component |
+|---|---|---|
+| Runs on | Server / build time | Browser |
+| Can be `async` | Yes | No |
+| Can use `useState` | No | Yes |
+| Can use `useEffect` | No | Yes |
+| Can read secrets | Yes | No |
+| Sent to browser as JS | No | Yes |
+
+The default is Server Component. Every file in your `app/` directory is a Server Component unless it has `'use client'` at the top. You opt in to the browser environment — you don't opt in to the server environment.
+
+## Server Components
+
+A Server Component is just an `async` function. It runs once — at build time for static exports, or per request if you have a server runtime — and produces HTML. It never runs in the browser.
+
+```tsx
+// app/posts/page.tsx — Server Component (no directive needed)
+export default async function PostsPage() {
+  // This fetch runs on the server. The browser never sees this network call.
+  const response = await fetch('https://jsonplaceholder.typicode.com/posts?_limit=5')
+  const posts: { id: number; title: string }[] = await response.json()
+
+  return (
+    <ul>
+      {posts.map(post => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+Notice: no `useEffect`, no `useState`, no loading spinner. You `await` the data directly inside the component. Next.js waits for the component to finish, then sends the final HTML to the browser. The browser receives a complete page — no JavaScript needed to populate the list.
+
+### What Server Components can do
+
+- Be `async` functions and `await` data directly
+- Fetch from databases, internal APIs, or the filesystem
+- Read environment variables that start with anything (not just `NEXT_PUBLIC_`)
+- Import large libraries (like an entire markdown parser) without adding to the browser's JavaScript bundle
+
+### What Server Components cannot do
+
+- Use `useState`, `useReducer`, `useEffect`, or any other hook
+- Attach event handlers (`onClick`, `onChange`)
+- Use browser APIs (`localStorage`, `window`, `navigator`)
+- Use Next.js hooks like `useRouter`, `usePathname`, or `useSearchParams`
+
+If you try to use any of these in a Server Component, Next.js will throw an error at build time — which is helpful, because it catches the mistake early.
+
+## Client Components
+
+Client Components are your regular React components. They run in the browser, hydrate after the initial HTML loads, and can use all the React features you already know.
+
+The only difference from what you've done before: you must declare them explicitly with the `'use client'` directive.
+
+```tsx
+// app/components/counter.tsx
+'use client'  // Must be the very first line — above all imports
+
+import { useState } from 'react'
+
+export function Counter() {
+  const [count, setCount] = useState(0)
+
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Clicked {count} times
+    </button>
+  )
+}
+```
+
+The `'use client'` line must appear before any `import` statements. It marks a module boundary: this file and everything it imports will be included in the browser's JavaScript bundle.
+
+### When you need a Client Component
+
+Use `'use client'` when your component needs any of the following:
+
+- **State**: `useState`, `useReducer`
+- **Side effects**: `useEffect`, `useLayoutEffect`
+- **Event handlers**: `onClick`, `onChange`, form submissions
+- **Browser APIs**: `localStorage`, `window.location`, `document`
+- **Next.js client hooks**: `useRouter`, `usePathname`, `useSearchParams`
+
+If your component only renders static content — headings, paragraphs, lists, images — it does not need `'use client'` and is better off as a Server Component.
+
+## The Composition Pattern
+
+Here is the key rule: **Server Components can render Client Components, but Client Components cannot import Server Components.**
+
+This pattern — server wrapping client — is how you build most pages in Next.js:
+
+```tsx
+// app/dashboard/page.tsx — Server Component
+import { UserCard } from './user-card'     // Server Component
+import { SearchBar } from './search-bar'   // Client Component ('use client')
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+async function fetchUser(): Promise<User> {
+  const res = await fetch('https://jsonplaceholder.typicode.com/users/1')
+  return res.json()
+}
+
+export default async function DashboardPage() {
+  const user = await fetchUser()  // Runs on server — browser never sees this call
+
+  return (
+    <main>
+      <UserCard user={user} />  {/* Server-rendered — just HTML */}
+      <SearchBar />             {/* Client-rendered — interactive */}
+    </main>
+  )
+}
+```
+
+```tsx
+// app/dashboard/search-bar.tsx — Client Component
+'use client'
+
+import { useState } from 'react'
+
+export function SearchBar() {
+  const [query, setQuery] = useState('')
+
+  return (
+    <input
+      type="search"
+      value={query}
+      onChange={e => setQuery(e.target.value)}
+      placeholder="Search..."
+    />
+  )
+}
+```
+
+The `DashboardPage` fetches the user on the server. It passes the result as props to `UserCard`, which is also a Server Component and just renders HTML. It also renders `SearchBar`, which needs interactivity, so it's a Client Component.
+
+The browser receives the full HTML including the user's name and email. Then it hydrates `SearchBar` so the input becomes interactive. The browser never sees the `fetchUser` call.
+
+### Passing data from server to client via props
+
+When a Server Component renders a Client Component, it can pass data as props — but those props must be **serializable**. Strings, numbers, arrays, and plain objects are fine. Functions, class instances, and `Date` objects are not.
+
+```tsx
+// OK — plain data
+<SearchBar initialQuery="react" results={posts} />
+
+// NOT OK — function prop from a Server Component to a Client Component
+<SearchBar onSelect={handleSelect} />  // functions can't cross the server/client boundary
+```
+
+## The Most Common Mistake
+
+When developers first learn about Client Components, they tend to mark entire pages as `'use client'` just because one small part needs interactivity. Avoid this.
+
+```tsx
+// WRONG — the whole page is a Client Component just for one button
+'use client'
+
+import { useState } from 'react'
+
+export default function BlogPage() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // This entire page — including all the blog content — is now in the client bundle
+  return (
+    <main>
+      <button onClick={() => setMenuOpen(!menuOpen)}>Menu</button>
+      <h1>My Blog</h1>
+      {/* hundreds of lines of static content... */}
+    </main>
+  )
+}
+```
+
+```tsx
+// CORRECT — extract the interactive part into its own Client Component
+// app/components/menu-button.tsx
+'use client'
+import { useState } from 'react'
+
+export function MenuButton() {
+  const [open, setOpen] = useState(false)
+  return <button onClick={() => setOpen(!open)}>{open ? 'Close' : 'Menu'}</button>
+}
+
+// app/blog/page.tsx — Server Component
+import { MenuButton } from '../components/menu-button'
+
+export default function BlogPage() {
+  return (
+    <main>
+      <MenuButton />
+      <h1>My Blog</h1>
+      {/* static content — not in the client bundle */}
+    </main>
+  )
+}
+```
+
+The rule of thumb: **push `'use client'` as far down the component tree as possible.** Keep your Server Components large and your Client Components small and focused.
+
+## Error Messages You'll Encounter
+
+**"useState can only be used in a Client Component"** — You used `useState` (or another hook) in a file without `'use client'`. Add the directive as the first line.
+
+**"Props must be serializable"** — You tried to pass a function or class instance from a Server Component to a Client Component via props. Use plain data instead.
+
+**"async/await is not yet supported in Client Components"** — You wrote `async function MyComponent()` in a file with `'use client'`. Remove `async` and use `useEffect` for side effects instead.
+
+## Key Takeaways
+
+- Every component in Next.js is a Server Component by default. Add `'use client'` to opt into the browser environment.
+- Server Components can be `async`, fetch data directly, and access secrets — but cannot use hooks or browser APIs.
+- Client Components can use `useState`, `useEffect`, and event handlers — but their code ships to the browser.
+- Server Components can render Client Components. The reverse is not allowed.
+- Keep `'use client'` as low in the component tree as possible. Only the parts that need interactivity should be Client Components.
+- Props passed from server to client must be plain, serializable values (strings, numbers, plain objects, arrays).

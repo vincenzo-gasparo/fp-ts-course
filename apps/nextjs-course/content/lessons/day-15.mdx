@@ -1,0 +1,250 @@
+---
+title: "Images, Fonts, and Deploying to GitHub Pages"
+day: 15
+description: "Optimize images and fonts with Next.js built-ins, then ship your app to the world with a static export on GitHub Pages."
+quiz:
+  - question: "Why is `images: { unoptimized: true }` required in `next.config.mjs` when using `output: 'export'`?"
+    options:
+      - "It makes images load faster by skipping unnecessary processing"
+      - "Next.js image optimization runs through a server-side API that does not exist in a static export"
+      - "GitHub Pages does not support the WebP or AVIF image formats"
+    correct: 1
+    explanation: "The `next/image` component normally sends image requests through a built-in API route (`/_next/image`) that resizes images, converts them to modern formats, and serves them with optimal cache headers. That API route requires a running Node.js server. A static export (`output: 'export'`) produces only HTML, CSS, and JS files — no server. Setting `unoptimized: true` tells Next.js to serve images as-is without the optimization step, which works fine for static hosting."
+  - question: "What does setting `basePath: '/nextjs-course'` in `next.config.mjs` do?"
+    options:
+      - "It sets the default page that loads when users visit your domain"
+      - "It prefixes all internal links and asset URLs so the app works when served from a subdirectory path"
+      - "It restricts the app to only respond to requests that start with `/nextjs-course`"
+    correct: 1
+    explanation: "GitHub Pages serves your app at a URL like `username.github.io/repo-name/nextjs-course`, not at the root `/`. Without `basePath`, Next.js generates links like `/about` and asset paths like `/_next/static/...`, which all break when the site lives in a subdirectory. Setting `basePath: '/nextjs-course'` makes Next.js prepend that path to every internal link, `<script>` tag, and CSS reference automatically."
+  - question: "Which Next.js features are unavailable when you deploy with `output: 'export'` to GitHub Pages?"
+    options:
+      - "Client components, React hooks, and browser APIs"
+      - "TypeScript, ESLint, and CSS Modules"
+      - "Server Actions, Incremental Static Regeneration, and runtime data fetching in Server Components"
+    correct: 2
+    explanation: "Static export produces plain files that any static host can serve. Features that require a running server are unavailable: Server Actions (they handle POST requests on the server), ISR (the server re-renders stale pages in the background), and fetching live data at request time in Server Components. Client components, hooks, and browser APIs work fine because they run in the user's browser. TypeScript, ESLint, and CSS Modules are build-time tools and are unaffected."
+---
+
+You have now built a full Next.js application. This final lesson covers three remaining practical topics — optimizing images, loading fonts correctly, and getting your site onto the internet — then wraps up with an honest look at the trade-offs of different deployment strategies.
+
+## next/image — The Optimized Image Component
+
+Plain `<img>` tags in HTML have some hidden costs: they load immediately even if the image is far off-screen, they do not adapt to the user's screen size, and they can cause layout shift (the page "jumps" as images load in). The Next.js `Image` component solves all three.
+
+```tsx
+import Image from 'next/image'
+
+// Fixed-size image — you must provide width and height
+<Image
+  src="/profile.jpg"
+  alt="Profile photo of Alice"
+  width={400}
+  height={400}
+/>
+```
+
+`width` and `height` are required for fixed images. They let the browser reserve the right amount of space before the image loads, eliminating layout shift.
+
+### Filling a Container
+
+When you want an image to fill its parent element (common for hero banners and cards), use the `fill` prop instead of explicit dimensions:
+
+```tsx
+<div className="relative h-64 w-full">
+  <Image
+    src="/hero.jpg"
+    alt="Mountain landscape at sunrise"
+    fill
+    style={{ objectFit: 'cover' }}
+    sizes="100vw"
+  />
+</div>
+```
+
+Two things are required when using `fill`:
+
+1. The parent element must have `position: relative` (or `absolute`/`fixed`). In Tailwind that is `relative`.
+2. You should provide a `sizes` attribute so the browser knows how wide the image will be rendered, which helps it pick the right source image.
+
+### Preloading Above-the-Fold Images
+
+By default, every `Image` is lazy-loaded — it only fetches when the user scrolls near it. This is the right default for most images. For a hero image that is visible the moment the page loads, you want the browser to start fetching it early:
+
+```tsx
+<Image
+  src="/hero.jpg"
+  alt="Hero banner"
+  width={1200}
+  height={600}
+  preload
+/>
+```
+
+The `preload` prop (introduced in Next.js 16 as a replacement for the deprecated `priority` prop) adds a `<link rel="preload">` tag to the page head, telling the browser to download this image with high priority before it even starts rendering.
+
+### External Images
+
+If your images live on a different domain (a CDN, an image service like Unsplash, a CMS), you must explicitly allow that hostname in your config:
+
+```js
+// next.config.mjs
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.myapp.com',
+        pathname: '/uploads/**',
+      },
+    ],
+  },
+}
+```
+
+This is a security measure — without it, someone could pass any URL to your image optimization endpoint.
+
+### Static Export: Disabling Optimization
+
+When you export your site as static files (as this project does), image optimization is unavailable because it requires a live server. You tell Next.js to skip it:
+
+```js
+// next.config.mjs
+const nextConfig = {
+  output: 'export',
+  images: { unoptimized: true },
+}
+```
+
+With `unoptimized: true`, images are served exactly as they are in your `public/` folder. You lose automatic WebP conversion and resizing, but every other `Image` benefit — lazy loading, layout shift prevention, the clean API — still works.
+
+## next/font — Self-Hosted Web Fonts
+
+Loading a Google Font the old way means the user's browser makes a request to Google's servers during page load. This has two downsides: a privacy concern (Google sees every user's IP address) and a performance cost (an extra network round-trip before the font renders).
+
+`next/font/google` eliminates both problems. At build time, Next.js downloads the font files from Google and bundles them into your own static assets. The browser never contacts Google.
+
+```tsx
+// app/layout.tsx
+import { Inter, JetBrains_Mono } from 'next/font/google'
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
+})
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+Each call to `Inter(...)` returns an object with a `variable` property — a CSS custom property name. Applying `inter.variable` to the `<html>` element makes `--font-inter` available everywhere in the document.
+
+You then wire the CSS variable into your design system. In Tailwind v4:
+
+```css
+/* app/globals.css */
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+```
+
+Now `font-sans` and `font-mono` in your Tailwind classes use your self-hosted fonts.
+
+### Why Fonts Must Stay in the App
+
+You might wonder whether you could define fonts in a shared component library and import them from there. The answer is no — `next/font/google` uses a Next.js build-time transform that only runs inside a Next.js app. The font declarations must live in `app/layout.tsx` (or another file inside the app). You can then pass the resulting class names as props into shared components.
+
+## Deploying to GitHub Pages
+
+GitHub Pages is a free static hosting service built into GitHub. Since this project uses `output: 'export'`, the build produces a plain `out/` folder full of HTML, CSS, and JS files — exactly what GitHub Pages expects.
+
+### Step 1: Configure GitHub Pages
+
+In your repository settings, go to **Pages** and set the source to **GitHub Actions**. This tells GitHub to deploy whatever your workflow uploads rather than pointing at a branch directly.
+
+### Step 2: The basePath Problem
+
+Your site will live at a URL like `https://username.github.io/repo-name/nextjs-course`. Notice the subdirectory — your app is not at the root of the domain. By default, Next.js generates all links and asset references starting from `/`, which breaks in a subdirectory.
+
+The fix is `basePath`:
+
+```js
+// next.config.mjs
+const nextConfig = {
+  output: 'export',
+  basePath: process.env.CI ? '/nextjs-course' : '',
+  images: { unoptimized: true },
+}
+```
+
+When `CI=true` (set automatically by GitHub Actions), `basePath` is `/nextjs-course`. Every internal `<Link>`, every `<script>` tag, every CSS file reference gets that prefix automatically. In local development, `CI` is not set, so `basePath` is an empty string and everything works at `localhost:3000`.
+
+### Step 3: The GitHub Actions Workflow
+
+A workflow file in `.github/workflows/deploy.yml` handles the build and deployment:
+
+```yaml
+- name: Build nextjs-course
+  run: pnpm --filter nextjs-course build
+  env:
+    CI: true
+
+# Later in the workflow, static files are collected:
+# cp -r apps/nextjs-course/out deploy/nextjs-course
+```
+
+The workflow runs on every push to `main`, builds the app, and uploads the `out/` directory to GitHub Pages. The whole process takes about two minutes.
+
+## Static Export vs. Vercel: Choosing the Right Host
+
+Deploying to GitHub Pages is free and straightforward, but it comes with real limitations. Understanding the trade-offs helps you pick the right option for future projects.
+
+### What You Give Up with Static Export
+
+| Feature | Static Export (GitHub Pages) | Vercel |
+|---------|------------------------------|--------|
+| Server Actions | Not available | Full support |
+| ISR (stale-while-revalidate) | Not available | Full support |
+| Runtime data fetching in Server Components | Not available — data is baked in at build time | Full support |
+| Image optimization | Disabled (`unoptimized: true`) | Built-in, global CDN |
+| Cost | Free | Free tier available |
+
+Server Actions, ISR, and runtime server components all require a Node.js process running somewhere, handling requests as they come in. Static hosting has no such process.
+
+### When Static Export Is Fine
+
+Static export works well when your content does not change frequently (blog posts, documentation, course lessons), your data is known at build time, and you do not need form submissions or authenticated API calls handled server-side.
+
+### When to Use Vercel
+
+Connect your GitHub repository to [vercel.com](https://vercel.com) and you get automatic deployments on every push, a preview URL for every pull request, and the full Next.js feature set — Server Actions, ISR, image optimization on a global CDN, and server-side rendering at request time. No configuration required. Vercel built Next.js and keeps the two in sync.
+
+For a production application that handles user accounts, dynamic content, or real-time data, Vercel is the straightforward choice.
+
+## Key Takeaways
+
+- Use `next/image` instead of `<img>` for automatic lazy loading, layout shift prevention, and (when not on static export) automatic format conversion and resizing.
+- The `fill` prop makes an image fill its parent container; the parent must have `position: relative`.
+- Use the `preload` prop on above-the-fold images to tell the browser to load them early with high priority.
+- `images: { unoptimized: true }` is required with `output: 'export'` because image optimization depends on a server that does not exist in a static build.
+- `next/font/google` downloads fonts at build time and serves them from your own server, improving both privacy and performance. Font declarations must live inside the Next.js app.
+- `basePath` in `next.config.mjs` prefixes all internal links and asset URLs — essential when your app is served from a subdirectory like GitHub Pages.
+- Static export is ideal for content that is known at build time; Vercel supports the full Next.js feature set including Server Actions, ISR, and runtime data fetching.

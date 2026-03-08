@@ -1,0 +1,270 @@
+---
+title: "Lists, Keys, and Conditional Rendering"
+day: 4
+description: "Learn how to render lists of data with map(), understand why keys matter, and control what your UI shows with conditional rendering patterns."
+quiz:
+  - question: "Why is using Math.random() as a key prop harmful?"
+    options:
+      - "It causes a TypeScript type error because keys must be strings or numbers."
+      - "React generates a new random key on every render, so every item is unmounted and remounted from scratch each time."
+      - "It works fine for small lists but causes performance issues for large ones."
+    correct: 1
+    explanation: "Keys are React's way of tracking which item is which across renders. When you use Math.random(), every render produces a completely different key for every item. React sees 'old key gone, new key appeared' and destroys then recreates every DOM node and component — losing any internal state, focus, animations, and causing unnecessary work. Keys must be stable across renders to be useful."
+  - question: "What does this JSX render when count is 0: {count && <p>{count} items</p>}?"
+    options:
+      - "Nothing — 0 is falsy, so the expression short-circuits and renders nothing."
+      - "The number 0 appears in the DOM, because 0 is a valid React node even though it is falsy."
+      - "It throws a runtime error because you cannot use && with a number."
+    correct: 1
+    explanation: "This is a classic React gotcha. JavaScript's && operator returns the left operand when it is falsy, and 0 is falsy — but React renders the number 0 as text. So instead of rendering nothing, you see a lonely '0' on the page. The fix is to make the condition explicitly boolean: {count > 0 && <p>{count} items</p>}. This ensures the left side is always true or false, never a number."
+  - question: "When is using the array index as a key acceptable?"
+    options:
+      - "Never — you should always use a unique ID from your data."
+      - "Only when the list is completely static: items are never added, removed, or reordered."
+      - "Whenever the list has fewer than 10 items."
+    correct: 1
+    explanation: "Index as key is safe only for truly static lists that never change order and never have items added or removed. In that scenario, index 0 always maps to the same item, so React stays consistent. The moment your list can be filtered, sorted, or mutated, index keys cause bugs: deleting item 0 shifts every other item's index by one, so React thinks item 1 became item 0 and may preserve stale state (like a checked checkbox) on the wrong item. Always prefer a stable unique ID from your data."
+---
+
+You already know how to render a single piece of UI — a component with some props. But real apps display collections of data: a list of products, a feed of posts, a table of users. In this lesson you will learn how to turn arrays of data into lists of elements, why the `key` prop is more important than it looks, and how to control what your UI shows depending on conditions.
+
+## Rendering Lists with map()
+
+JavaScript's built-in `Array.prototype.map()` is the standard way to turn an array of data into an array of JSX elements. JSX can render arrays directly, so the pattern fits naturally.
+
+Start simple:
+
+```tsx
+const fruits = ['Apple', 'Banana', 'Cherry']
+
+function FruitList() {
+  return (
+    <ul>
+      {fruits.map(fruit => (
+        <li key={fruit}>{fruit}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+`map()` loops over each item and returns a new array of `<li>` elements. JSX renders that array as sibling nodes inside `<ul>`.
+
+In practice, you almost always work with arrays of objects rather than plain strings. Here is a more realistic example:
+
+```tsx
+interface Product {
+  id: number
+  name: string
+  price: number
+}
+
+const products: Product[] = [
+  { id: 1, name: 'Laptop', price: 999 },
+  { id: 2, name: 'Mouse', price: 29 },
+  { id: 3, name: 'Keyboard', price: 79 },
+]
+
+function ProductList() {
+  return (
+    <div>
+      {products.map(product => (
+        <div key={product.id} className="product-card">
+          <h3>{product.name}</h3>
+          <p>${product.price}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+Notice `key={product.id}` on the outer element of each iteration. You will see a warning in the console if you forget it. The next section explains exactly why it matters.
+
+## Why Keys Matter
+
+The `key` prop looks like a minor detail, but it is fundamental to how React updates the DOM efficiently.
+
+When your data changes — an item is added, removed, or reordered — React needs to figure out which DOM nodes to keep, which to update, and which to destroy. Without keys, React compares elements purely by their position in the list. With keys, React can match each element to its previous version by identity, regardless of position.
+
+This matters most when list items have their own internal state. Imagine a to-do list where each item has a checkbox. If you delete the first item and React has no keys to go on, it may keep the first DOM node (now showing the second item's text) while carrying over the checked state from the deleted item — because positionally, slot 0 still exists.
+
+### Choosing Good Keys
+
+```tsx
+// BAD — index as key when the list can change
+{todos.map((todo, index) => (
+  <li key={index}>{todo.text}</li>
+))}
+// If you delete item at index 0, item 1 shifts to index 0.
+// React thinks item 0 changed rather than item 0 being removed.
+
+// GOOD — use a stable, unique ID from your data
+{todos.map(todo => (
+  <li key={todo.id}>{todo.text}</li>
+))}
+
+// TERRIBLE — never do this
+{todos.map(todo => (
+  <li key={Math.random()}>{todo.text}</li>
+))}
+// Math.random() produces a different key every render.
+// React sees every key as new and destroys then remounts every item from scratch.
+```
+
+**When is index-as-key acceptable?** Only when the list is completely static — items are never added, removed, or reordered. A hardcoded list of nav links, for instance, is fine with index keys. If there is any chance the list mutates, use an ID.
+
+## Filtering Before Mapping
+
+You can chain array methods before `map()` to control which items get rendered. `filter()` is the most common tool here:
+
+```tsx
+const tasks = [
+  { id: 1, text: 'Buy milk', done: true },
+  { id: 2, text: 'Write report', done: false },
+  { id: 3, text: 'Call doctor', done: false },
+]
+
+function PendingTasks() {
+  return (
+    <ul>
+      {tasks
+        .filter(t => !t.done)
+        .map(t => <li key={t.id}>{t.text}</li>)
+      }
+    </ul>
+  )
+}
+```
+
+`filter()` returns a new array with only the items that pass the test, and then `map()` converts those to JSX. This is a clean, readable pattern that keeps your rendering logic close to the template.
+
+For more complex transformations, it can be cleaner to build the filtered array as a variable before the return:
+
+```tsx
+function PendingTasks() {
+  const pending = tasks.filter(t => !t.done)
+
+  return (
+    <ul>
+      {pending.map(t => <li key={t.id}>{t.text}</li>)}
+    </ul>
+  )
+}
+```
+
+Both approaches are equally valid. Choose whichever reads more clearly for the situation.
+
+## Conditional Rendering
+
+Sometimes you want to show something only under certain conditions — a loading spinner, an error message, or content that depends on whether a user is logged in. React gives you several patterns for this.
+
+### Pattern 1: Early Return
+
+The cleanest option for top-level conditions. Return early from the component before reaching the main render:
+
+```tsx
+function UserGreeting({ user }: { user: User | null }) {
+  if (!user) return <p>Please log in.</p>
+  return <h1>Welcome back, {user.name}!</h1>
+}
+```
+
+This is easy to read and avoids nesting. Use it when the condition determines the entire output of the component.
+
+### Pattern 2: Ternary Operator
+
+For two alternatives rendered inline, the ternary (`? :`) is the natural choice:
+
+```tsx
+<p>{isOnline ? '🟢 Online' : '🔴 Offline'}</p>
+
+<div className={isActive ? 'btn-active' : 'btn-inactive'}>
+  Click me
+</div>
+```
+
+Keep ternaries simple. If either branch is long, the pattern becomes hard to read — in that case, prefer an early return or a variable.
+
+### Pattern 3: Logical AND (&&)
+
+For show-or-nothing cases, `&&` is concise:
+
+```tsx
+{isLoggedIn && <AdminPanel />}
+{hasError && <ErrorMessage text={error} />}
+```
+
+When `isLoggedIn` is `false`, the expression short-circuits and renders nothing. When it is `true`, the right side renders.
+
+**Critical warning — the `0` bug:**
+
+```tsx
+// BUG: when count is 0, this renders the number "0" in the DOM
+{count && <p>{count} items</p>}
+
+// FIX: make the condition explicitly boolean
+{count > 0 && <p>{count} items</p>}
+```
+
+`0` is falsy in JavaScript, so `&&` short-circuits — but React still renders `0` as a text node. This is one of the most common subtle bugs in React code. Always use a proper boolean comparison on the left side of `&&`.
+
+### Pattern 4: Variable Assignment
+
+When your branching logic is complex, assign the result to a variable before returning:
+
+```tsx
+function StatusBadge({ status }: { status: 'active' | 'pending' | 'inactive' }) {
+  let label: string
+  let className: string
+
+  if (status === 'active') {
+    label = 'Active'
+    className = 'badge-green'
+  } else if (status === 'pending') {
+    label = 'Pending'
+    className = 'badge-yellow'
+  } else {
+    label = 'Inactive'
+    className = 'badge-gray'
+  }
+
+  return <span className={className}>{label}</span>
+}
+```
+
+This keeps the JSX clean and simple while allowing arbitrarily complex logic above the return statement.
+
+## Fragments with Keys
+
+When each list item needs to render more than one element at the top level, you need a wrapper. But adding an extra `<div>` pollutes the DOM. React provides `Fragment` for exactly this purpose:
+
+```tsx
+import { Fragment } from 'react'
+
+function PeopleList({ people }: { people: Person[] }) {
+  return (
+    <dl>
+      {people.map(person => (
+        <Fragment key={person.id}>
+          <dt>{person.name}</dt>
+          <dd>{person.bio}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  )
+}
+```
+
+`Fragment` renders no DOM node of its own — it is purely a grouping mechanism. Note that you must use the named `Fragment` import here. The shorthand `<>...</>` does not accept a `key` prop, so it cannot be used inside `map()`.
+
+## Key Takeaways
+
+- Use `Array.map()` to convert arrays of data into arrays of JSX elements.
+- Every top-level element returned from `map()` must have a unique, stable `key` prop.
+- Keys help React identify which items changed between renders — without them, React falls back to positional comparison and can update the wrong items.
+- Use a unique ID from your data as a key. Index is only safe for completely static lists.
+- Never use `Math.random()` as a key — it changes every render and forces React to destroy and recreate every item.
+- Chain `.filter()` before `.map()` to control which items appear.
+- For conditional rendering, pick the pattern that reads most clearly: early return for top-level conditions, ternary for two alternatives, `&&` for show-or-nothing (but beware the `0` bug), and variable assignment for complex branches.
+- When a list item needs multiple sibling elements at the top level, use `<Fragment key={...}>` rather than a wrapping `<div>`.

@@ -1,0 +1,338 @@
+---
+title: "Dynamic Routes and Static Generation"
+day: 9
+description: "Learn how to create routes that handle many URLs with a single file, generate static pages at build time with generateStaticParams, and handle missing content gracefully."
+quiz:
+  - question: "What is the correct folder name for a dynamic route segment that captures a value called 'slug'?"
+    options:
+      - "slug/"
+      - ":slug/"
+      - "[slug]/"
+    correct: 2
+    explanation: "Next.js uses square brackets around the segment name to mark a folder as a dynamic route: [slug]/. The name inside the brackets becomes the key in the params object (so you access it as params.slug). The colon syntax (:slug) is used by other routing libraries like React Router and Express, but not Next.js. A plain folder named 'slug' would just be a static route that only matches the literal URL /slug."
+  - question: "Why is generateStaticParams required when your Next.js app uses output: 'export' (static export)?"
+    options:
+      - "Because static export disables TypeScript support for dynamic routes"
+      - "Because without it, there is no server at runtime to handle requests for unknown paths — Next.js must generate every page as an HTML file at build time"
+      - "Because generateStaticParams improves performance by caching route params in memory"
+    correct: 1
+    explanation: "When you use static export, the result is a folder of plain HTML, CSS, and JavaScript files — there is no Node.js server running. Every URL that your site needs to handle must be pre-rendered into an HTML file during the build. For dynamic routes, Next.js cannot know which slugs or IDs exist unless you tell it. generateStaticParams provides that list. If you omit it, Next.js does not know which paths to generate and the build will fail. This has nothing to do with TypeScript or caching — it is purely about the absence of a runtime server."
+  - question: "In Next.js 15, how must you access the params object in a page component?"
+    options:
+      - "As a regular synchronous object: const { slug } = params"
+      - "By awaiting it first: const { slug } = await params"
+      - "By calling it as a function: const { slug } = params()"
+    correct: 1
+    explanation: "In Next.js 15, params is a Promise, so you must await it before accessing any values: const { slug } = await params. This changed from earlier versions where params was a plain synchronous object and you could write params.slug directly. Many tutorials written before Next.js 15 still show the synchronous pattern, which now triggers a deprecation warning. The page component must be an async function for this to work. Calling params as a function is never valid."
+---
+
+A blog needs a page for every post. A store needs a page for every product. Creating a separate file for each one is not practical — instead, you create one file that handles all of them. This is a dynamic route.
+
+This lesson covers how dynamic routes work in Next.js, how to tell Next.js which pages to generate at build time, and how to handle the case where a user requests a page that does not exist.
+
+## What Is a Dynamic Route?
+
+Look at a URL like `/blog/how-to-use-react-hooks`. The `/blog/` part is fixed, but `how-to-use-react-hooks` changes for every post. In your file system, you represent this with a folder whose name is wrapped in square brackets:
+
+```
+app/
+  blog/
+    [slug]/
+      page.tsx    ← handles /blog/anything
+  products/
+    [id]/
+      page.tsx    ← handles /products/anything
+```
+
+The bracket syntax tells Next.js: "this segment of the URL is variable." Whatever appears in that position in the URL becomes available to your component as a parameter. The name inside the brackets (`slug`, `id`) is up to you — it just needs to be descriptive.
+
+A few examples of what these routes match:
+
+| URL | Matched route | params value |
+|---|---|---|
+| `/blog/hello-world` | `app/blog/[slug]/page.tsx` | `{ slug: 'hello-world' }` |
+| `/blog/react-tips` | `app/blog/[slug]/page.tsx` | `{ slug: 'react-tips' }` |
+| `/products/42` | `app/products/[id]/page.tsx` | `{ id: '42' }` |
+
+Notice that URL parameters are always strings, even if they look like numbers.
+
+## Accessing the Dynamic Segment
+
+Inside your page component, Next.js passes the matched URL values through a `params` prop.
+
+**Important**: In Next.js 15, `params` is a `Promise`. You must `await` it before reading any values. Many older tutorials show the synchronous pattern (`params.slug`) which is now deprecated.
+
+```tsx
+// app/blog/[slug]/page.tsx
+
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params  // ← must await in Next.js 15
+
+  return (
+    <article>
+      <h1>You are reading: {slug}</h1>
+    </article>
+  )
+}
+```
+
+The page component must be `async` so that you can use `await` inside it. This is standard in Next.js App Router — most page components are async functions.
+
+## generateStaticParams: Telling Next.js Which Pages to Build
+
+This course (and many Next.js sites) is deployed as a **static export**: the build produces a folder of HTML, CSS, and JavaScript files with no server running. Every page the site needs must be generated as an HTML file during the build.
+
+For a static home page, that is straightforward — there is one file, Next.js generates one HTML file. For a dynamic route, Next.js does not know which values the segment can take unless you tell it. That is exactly what `generateStaticParams` does.
+
+```tsx
+// app/blog/[slug]/page.tsx
+
+const posts = [
+  { slug: 'hello-world', title: 'Hello World', excerpt: 'Getting started.' },
+  { slug: 'react-tips', title: 'React Tips', excerpt: 'Practical patterns.' },
+  { slug: 'nextjs-guide', title: 'Next.js Guide', excerpt: 'From zero to deploy.' },
+]
+
+// Return the list of params objects to generate
+export function generateStaticParams() {
+  return posts.map(post => ({ slug: post.slug }))
+}
+
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = posts.find(p => p.slug === slug)
+
+  return (
+    <article>
+      <h1>{post?.title}</h1>
+      <p>{post?.excerpt}</p>
+    </article>
+  )
+}
+```
+
+At build time, Next.js calls `generateStaticParams`, receives `[{ slug: 'hello-world' }, { slug: 'react-tips' }, { slug: 'nextjs-guide' }]`, and generates three HTML files:
+
+```
+out/
+  blog/
+    hello-world/
+      index.html
+    react-tips/
+      index.html
+    nextjs-guide/
+      index.html
+```
+
+Without `generateStaticParams`, the static export build will fail — Next.js simply has no way to know what to generate.
+
+### Fetching from a Real Data Source
+
+In a real app, your posts would come from a database, CMS, or API rather than a hardcoded array. The pattern is the same — `generateStaticParams` fetches the full list, and the page component fetches a single item:
+
+```tsx
+export async function generateStaticParams() {
+  const posts = await fetchAllPosts()  // your data-fetching function
+  return posts.map(post => ({ slug: post.slug }))
+}
+
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = await fetchPostBySlug(slug)
+  // ...
+}
+```
+
+## Handling Missing Content with notFound()
+
+What happens if someone navigates to `/blog/this-post-does-not-exist`? Without any guard, your component would receive `undefined` from `posts.find(...)` and likely crash or render a broken page.
+
+The correct response is to show a 404 page. Next.js provides `notFound()` for this:
+
+```tsx
+import { notFound } from 'next/navigation'
+
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = posts.find(p => p.slug === slug)
+
+  if (!post) {
+    notFound()  // stops execution here and renders the 404 page
+  }
+
+  // TypeScript now knows post is defined below this point
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.excerpt}</p>
+    </article>
+  )
+}
+```
+
+`notFound()` works by throwing a special error internally — code after it never runs. Next.js catches this and renders the nearest `not-found.tsx` file, or its built-in 404 page if none exists.
+
+### Creating a Custom not-found.tsx
+
+You can create a `not-found.tsx` file in any route segment to customize what users see:
+
+```tsx
+// app/blog/not-found.tsx
+import Link from 'next/link'
+
+export default function BlogNotFound() {
+  return (
+    <div className="text-center py-16">
+      <h2 className="text-2xl font-bold">Post Not Found</h2>
+      <p className="mt-2 text-gray-600">
+        The post you are looking for does not exist or may have been removed.
+      </p>
+      <Link href="/blog" className="mt-4 inline-block text-blue-600 underline">
+        ← Back to Blog
+      </Link>
+    </div>
+  )
+}
+```
+
+This file is only shown when `notFound()` is called within a route under `/blog`. You can also create `app/not-found.tsx` for a site-wide 404 page.
+
+## Dynamic Metadata with generateMetadata
+
+When each page has different content, it should also have a different `<title>` tag and description for SEO and browser tabs. `generateMetadata` receives the same `params` as the page component:
+
+```tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = posts.find(p => p.slug === slug)
+
+  return {
+    title: post?.title ?? 'Post Not Found',
+    description: post?.excerpt,
+  }
+}
+```
+
+Next.js calls this function at build time and injects the result into the `<head>` of each generated HTML file. The `params` argument works identically to the page component — always a Promise in Next.js 15, always awaited.
+
+## Multiple Dynamic Segments
+
+A route can have more than one dynamic segment. A shop with categories and products is a common example:
+
+```
+app/
+  shop/
+    [category]/
+      [product]/
+        page.tsx   ← matches /shop/clothing/blue-t-shirt
+```
+
+```tsx
+// app/shop/[category]/[product]/page.tsx
+
+export default async function ProductPage({
+  params,
+}: {
+  params: Promise<{ category: string; product: string }>
+}) {
+  const { category, product } = await params
+
+  return (
+    <div>
+      <p>Category: {category}</p>
+      <p>Product: {product}</p>
+    </div>
+  )
+}
+
+export function generateStaticParams() {
+  return [
+    { category: 'clothing', product: 'blue-t-shirt' },
+    { category: 'clothing', product: 'black-jeans' },
+    { category: 'accessories', product: 'leather-wallet' },
+  ]
+}
+```
+
+Each entry in the `generateStaticParams` array must include all dynamic segments. Next.js will generate one HTML file per entry.
+
+## Putting It All Together
+
+Here is a complete, realistic example combining everything covered in this lesson:
+
+```tsx
+// app/blog/[slug]/page.tsx
+import { notFound } from 'next/navigation'
+
+const posts = [
+  { slug: 'hello-world', title: 'Hello World', excerpt: 'Getting started with Next.js.' },
+  { slug: 'react-tips', title: 'React Tips', excerpt: 'Patterns for better React code.' },
+]
+
+export function generateStaticParams() {
+  return posts.map(post => ({ slug: post.slug }))
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = posts.find(p => p.slug === slug)
+  return {
+    title: post?.title ?? 'Post Not Found',
+    description: post?.excerpt,
+  }
+}
+
+export default async function BlogPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const post = posts.find(p => p.slug === slug)
+
+  if (!post) notFound()
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.excerpt}</p>
+    </article>
+  )
+}
+```
+
+## Key Takeaways
+
+- Dynamic route segments use square brackets in the folder name: `[slug]/`, `[id]/`
+- In Next.js 15, `params` is a `Promise` — always `await` it before accessing values
+- The page component must be `async` to use `await params`
+- `generateStaticParams` returns an array of param objects, one per page to generate
+- For static export (`output: 'export'`), `generateStaticParams` is required on all dynamic routes — there is no server to handle unknown paths at runtime
+- Call `notFound()` from `next/navigation` when the requested content does not exist
+- Create a `not-found.tsx` file in the route folder to customize the 404 page
+- `generateMetadata` gives each page a unique `<title>` and description; it receives `params` as a Promise too
+- Multiple dynamic segments are supported — each folder in the path can have brackets

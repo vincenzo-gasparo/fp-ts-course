@@ -38,17 +38,17 @@ jobs:
           CI: true
 
       # ── Add more courses here as they are created ──────────────────────────
-      # - name: Build rust-course
-      #   run: pnpm --filter rust-course build
-      #   env:
-      #     CI: true
+      - name: Build nextjs-course
+        run: pnpm --filter nextjs-course build
+        env:
+          CI: true
       # ───────────────────────────────────────────────────────────────────────
 
       - name: Merge build outputs
         run: |
           mkdir -p deploy
           cp -r apps/fp-ts-course/out deploy/fp-ts-course
-          # cp -r apps/rust-course/out deploy/rust-course
+          cp -r apps/nextjs-course/out deploy/nextjs-course
 
       - uses: actions/upload-pages-artifact@v3
         with:

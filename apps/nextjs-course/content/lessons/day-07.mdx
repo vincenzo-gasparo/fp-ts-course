@@ -1,0 +1,219 @@
+---
+title: "What is Next.js? The App Router"
+day: 7
+description: "Discover why Next.js exists, how file-system routing works, and how pages and layouts compose to build a full application structure."
+quiz:
+  - question: "You want a page at the URL /products in your Next.js app. What do you need to create?"
+    options:
+      - "A React component named Products and register it with a router config file"
+      - "A file at app/products/page.tsx that exports a default React component"
+      - "A file at app/products.tsx that exports a default React component"
+    correct: 1
+    explanation: "Next.js App Router uses the file system as the routing configuration. To create the route /products, you create a folder named products inside app/ and place a page.tsx file inside it. The default export of that file becomes the page component. A file at app/products.tsx (without the folder) does not create a route — only files named page.tsx inside a folder make a route publicly accessible. There is no separate router config to update."
+  - question: "What is the key difference between layout.tsx and page.tsx?"
+    options:
+      - "layout.tsx is for server components only; page.tsx works with client components"
+      - "layout.tsx wraps its children and persists across navigations within the same segment; page.tsx renders only the content for that specific route"
+      - "layout.tsx is optional but page.tsx is required in every folder"
+    correct: 1
+    explanation: "A page.tsx file renders the unique content for a specific URL. A layout.tsx file wraps one or more pages and, crucially, does not re-render when the user navigates between routes that share it. This makes layouts ideal for navigation bars, sidebars, and shared headers — elements that should stay on screen and maintain their state as the user moves through the app. Both page.tsx and layout.tsx are optional in any given folder, though the root app/layout.tsx is required because it must provide the html and body tags."
+  - question: "How does Next.js App Router determine what renders at the URL /blog/my-first-post?"
+    options:
+      - "Next.js reads a routes.config.ts file to find the matching component"
+      - "Next.js matches the URL to the file at app/blog/[slug]/page.tsx, passing 'my-first-post' as the slug parameter"
+      - "Next.js renders the nearest page.tsx it finds, starting from the root"
+    correct: 1
+    explanation: "Next.js App Router uses the folder structure inside app/ as the routing map. A folder name wrapped in square brackets — like [slug] — creates a dynamic segment that matches any value at that position in the URL. The matched value is passed to the page component as a parameter. So app/blog/[slug]/page.tsx handles /blog/anything, with the anything portion available as slug. There is no separate routes config — the file system is the config."
+---
+
+For the past six days you have been writing React components, managing state, and handling user events. You know how to build pieces of a UI. Now the question becomes: how do you turn those pieces into a complete, multi-page application that loads fast, handles routing, and can be deployed to the web?
+
+That is where Next.js comes in.
+
+## Why React Alone Is Not Enough
+
+React is a UI library. It is excellent at one thing: taking data and turning it into a component tree on screen. But it deliberately does not include:
+
+- **Routing** — navigating between different pages
+- **Server-side rendering** — generating HTML on the server for faster initial loads and better SEO
+- **Static generation** — pre-building pages at deploy time so no server is needed at runtime
+- **Image optimization** — automatically resizing and serving images efficiently
+- **Font optimization** — loading web fonts without layout shifts
+
+Every real-world React application needs some of these. Next.js provides them all as a cohesive framework, built on top of React. You still write React components — Next.js just gives you structure, conventions, and a build pipeline around them.
+
+## File-System Routing
+
+The most important idea in Next.js is this: **your folder structure is your routing configuration.**
+
+There is no separate file where you register routes. You create folders and files, and Next.js derives the URL structure from them automatically.
+
+```
+app/
+  page.tsx            → renders at /
+  about/
+    page.tsx          → renders at /about
+  blog/
+    page.tsx          → renders at /blog
+    [slug]/
+      page.tsx        → renders at /blog/anything
+  products/
+    page.tsx          → renders at /products
+    [id]/
+      page.tsx        → renders at /products/42, /products/99, etc.
+```
+
+Each folder is a URL segment. The file named `page.tsx` inside a folder is what makes that route publicly accessible and defines what renders there.
+
+## page.tsx — The Route Component
+
+A `page.tsx` file exports a single default React component. Next.js calls that component when a user navigates to the matching URL.
+
+```tsx
+// app/about/page.tsx
+export default function AboutPage() {
+  return (
+    <main>
+      <h1>About Us</h1>
+      <p>We build great software.</p>
+    </main>
+  )
+}
+```
+
+This is a plain React component. Nothing unusual about it. Next.js handles wiring it to the `/about` URL.
+
+## Dynamic Routes
+
+When a URL segment can be any value — like a blog post slug or a product ID — you wrap the folder name in square brackets.
+
+```tsx
+// app/blog/[slug]/page.tsx
+interface Props {
+  params: { slug: string }
+}
+
+export default function BlogPostPage({ params }: Props) {
+  return (
+    <article>
+      <h1>Post: {params.slug}</h1>
+    </article>
+  )
+}
+```
+
+A request to `/blog/my-first-post` renders this component with `params.slug` equal to `"my-first-post"`. A request to `/blog/another-post` renders it with `"another-post"`. One file handles all of them.
+
+## layout.tsx — Shared UI That Persists
+
+While `page.tsx` renders the content unique to a specific URL, `layout.tsx` renders the shell that wraps it. The critical difference: **layouts persist across navigations**.
+
+When a user moves from `/blog` to `/blog/my-post`, the blog layout does not re-render — it stays in place. Only the page content swaps out. This is what makes layouts the right place for navigation bars, sidebars, and shared headers.
+
+```tsx
+// app/layout.tsx — the root layout (required in every Next.js app)
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+          <a href="/blog">Blog</a>
+        </nav>
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+The `{children}` prop is where the current page renders. The root layout is the only file in your app that includes `<html>` and `<body>` tags — every page in the application is wrapped by it.
+
+## Nested Layouts
+
+Layouts compose. You can add a layout at any level of the folder hierarchy, and it will wrap only the routes beneath it.
+
+```
+app/
+  layout.tsx           → wraps the entire app
+  page.tsx             → /
+  blog/
+    layout.tsx         → wraps all /blog/* routes only
+    page.tsx           → /blog
+    [slug]/
+      page.tsx         → /blog/anything
+```
+
+```tsx
+// app/blog/layout.tsx
+export default function BlogLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <section>
+      <aside>
+        <h2>Blog</h2>
+        <p>Latest articles from our team</p>
+      </aside>
+      <div>{children}</div>
+    </section>
+  )
+}
+```
+
+When someone visits `/blog/my-first-post`, Next.js composes the layouts automatically:
+
+**Root Layout** wraps **Blog Layout** wraps **Post Page**
+
+The nesting happens in the order the folders are nested. You never manually wire layouts to pages — the file system position determines the composition.
+
+## Special Files
+
+Next.js reserves several filenames inside the `app/` folder. Each has a defined purpose:
+
+| File | Purpose |
+|------|---------|
+| `page.tsx` | Makes a route publicly accessible |
+| `layout.tsx` | Shared UI that wraps pages, persists across navigations |
+| `loading.tsx` | Shown while a page is loading (streaming UI) |
+| `error.tsx` | Shown when an unhandled error occurs in the route |
+| `not-found.tsx` | Shown when a resource is not found (404-style) |
+
+You only create the files you need. A folder with just a `page.tsx` is a perfectly valid route.
+
+## Static Export
+
+This course deploys to GitHub Pages as a **static site** — a collection of pre-built HTML, CSS, and JavaScript files. No server runs at request time; the files are served directly from a CDN.
+
+Next.js supports this with `output: 'export'` in `next.config.mjs`. At build time, Next.js generates one HTML file per page. The result is a fast, cheap, easily hosted site.
+
+This is already configured in the project you are working with. The constraint it introduces: any dynamic route (like `[slug]`) must tell Next.js ahead of time what all the possible slug values are, using a function called `generateStaticParams`. You will see this in practice when you build the course's lesson pages.
+
+## The Key Mental Shift
+
+In a plain React application with React Router, you write code like this to set up routes:
+
+```tsx
+// React Router approach
+<Routes>
+  <Route path="/" element={<HomePage />} />
+  <Route path="/about" element={<AboutPage />} />
+  <Route path="/blog/:slug" element={<BlogPostPage />} />
+</Routes>
+```
+
+In Next.js, that entire configuration is replaced by your folder structure. Creating `app/about/page.tsx` is all you do. Next.js infers the route from where the file lives.
+
+This convention-over-configuration approach means:
+
+- Less boilerplate to write and maintain
+- Routes are visible at a glance by looking at the file tree
+- The framework can make optimizations (like prefetching links) because it understands your routing structure
+
+## Key Takeaways
+
+- Next.js builds on top of React, adding routing, rendering strategies, image/font optimization, and a deployment pipeline
+- The `app/` folder is your routing map — folder names become URL segments, and `page.tsx` inside a folder makes it a public route
+- `page.tsx` renders the unique content for a URL; `layout.tsx` renders persistent shell UI that wraps one or more pages without re-rendering on navigation
+- Folder names wrapped in square brackets — like `[slug]` — create dynamic segments that match any value at that position in the URL
+- Layouts nest automatically based on folder hierarchy; a visit to `/blog/my-post` composes Root Layout → Blog Layout → Post Page
+- `output: 'export'` in `next.config.mjs` enables static site generation — all pages are pre-built as HTML files at deploy time, with no server required at runtime

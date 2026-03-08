@@ -1,0 +1,228 @@
+---
+title: "Props: Passing Data to Components"
+day: 2
+description: "Learn how to pass data into React components using props, including strings, numbers, objects, and children."
+quiz:
+  - question: "You want to pass a number to a component. Which syntax is correct?"
+    options:
+      - "<Card count=\"5\" />"
+      - "<Card count={5} />"
+      - "<Card count=5 />"
+    correct: 1
+    explanation: "Numbers (and all non-string values like booleans, arrays, and objects) must be passed inside curly braces: count={5}. Curly braces tell JSX to evaluate the expression as JavaScript. The quote syntax — count=\"5\" — would pass the string \"5\", not the number 5. The bare count=5 syntax is not valid JSX at all."
+  - question: "What is the `children` prop?"
+    options:
+      - "A special prop you must define manually to enable nesting"
+      - "The JSX content nested between a component's opening and closing tags"
+      - "A list of all child components defined in the same file"
+    correct: 1
+    explanation: "When you write <Card><p>Hello</p></Card>, React automatically collects everything between the opening and closing tags and passes it to the component as the `children` prop. You don't define it manually — you just type { children }: { children: React.ReactNode } in the component's parameters to receive it. The other options describe things that don't exist in React."
+  - question: "A child component receives a `score` prop from its parent. Can the child change the value of `score`?"
+    options:
+      - "Yes — the child can update props with a setter function"
+      - "Yes — props are just regular variables, so they can be reassigned"
+      - "No — props are read-only; only the parent that passed them can change them"
+    correct: 2
+    explanation: "Props are read-only from the perspective of the component that receives them. Data flows one way in React: from parent to child. If a child needs to trigger a change, it does so by calling a callback function that the parent passed down — the parent then updates its own state, which causes a new value to flow down as a prop. Mutating props directly would make data flow unpredictable and is never correct."
+---
+
+In the previous lesson you built your first React components and learned how JSX works. But all those components were static — they always rendered the same thing. Real interfaces need to display different data in the same structure: a list of user cards, a row of product tiles, a set of buttons with different labels.
+
+That's what **props** are for.
+
+## What Are Props?
+
+Props (short for *properties*) are the way you pass data from a parent component into a child component. They work a lot like HTML attributes — except they can carry any JavaScript value, not just strings.
+
+Here's the idea in a single example:
+
+```tsx
+// The parent decides what data to show
+function App() {
+  return (
+    <div>
+      <UserCard name="Alice" age={30} isAdmin={true} />
+      <UserCard name="Bob" age={25} isAdmin={false} />
+    </div>
+  )
+}
+
+// The child receives that data and uses it to render
+function UserCard({ name, age, isAdmin }: { name: string; age: number; isAdmin: boolean }) {
+  return (
+    <div className="card">
+      <h2>{name}</h2>
+      <p>Age: {age}</p>
+      {isAdmin && <span className="badge">Admin</span>}
+    </div>
+  )
+}
+```
+
+`UserCard` is defined once but used twice with completely different data. That's the power of props — one component, many possible outputs.
+
+### String props vs. expression props
+
+Notice the difference in how the props are written:
+
+- `name="Alice"` — quotes pass a **string literal** directly
+- `age={30}` — curly braces pass a **JavaScript expression**
+
+Strings are the special case: you can write them with quotes *or* curly braces (`name={"Alice"}` is also valid). But numbers, booleans, arrays, objects, and variables always need curly braces. If you wrote `age="30"`, you'd be passing the string `"30"` — not the number `30` — which could cause subtle bugs.
+
+## Receiving Props: Destructuring
+
+When a component receives props, there are two ways to access them:
+
+```tsx
+// Without destructuring — verbose, lots of repetition
+function Button(props: { label: string; color: string }) {
+  return <button style={{ backgroundColor: props.color }}>{props.label}</button>
+}
+
+// With destructuring — cleaner and easier to read
+function Button({ label, color }: { label: string; color: string }) {
+  return <button style={{ backgroundColor: color }}>{label}</button>
+}
+```
+
+Both are correct, but destructuring in the function parameters is the standard style in React. It makes it immediately obvious which props the component uses, and you avoid repeating `props.` everywhere.
+
+## Default Prop Values
+
+Sometimes a prop is optional — it has a sensible default and callers shouldn't have to provide it every time. You can set defaults right in the destructuring:
+
+```tsx
+function Button({ label, color = 'blue', size = 'medium' }: {
+  label: string
+  color?: string
+  size?: string
+}) {
+  return (
+    <button className={`btn btn-${size}`} style={{ backgroundColor: color }}>
+      {label}
+    </button>
+  )
+}
+
+// Uses default color and size
+<Button label="Save" />
+
+// Overrides both defaults
+<Button label="Delete" color="red" size="large" />
+```
+
+The `?` in `color?: string` means the prop is optional. The `= 'blue'` sets what value to use when it's omitted.
+
+One important gotcha: **`null` does not trigger the default**. Only when the prop is completely absent or explicitly passed as `undefined` will the default kick in. If a parent passes `color={null}`, the component receives `null`, not `'blue'`.
+
+## The Children Prop
+
+So far every prop has been passed as an attribute. But there's a special prop called `children` that works differently — it captures whatever JSX you nest *inside* a component's tags.
+
+```tsx
+function Card({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <div className="card">
+      <h3 className="card-title">{title}</h3>
+      <div className="card-body">{children}</div>
+    </div>
+  )
+}
+```
+
+You use it just like any HTML element that can contain content:
+
+```tsx
+function App() {
+  return (
+    <Card title="User Profile">
+      <img src="/avatar.png" alt="Avatar" />
+      <p>Alice works at Acme Corp.</p>
+      <button>Edit profile</button>
+    </Card>
+  )
+}
+```
+
+Everything between `<Card>` and `</Card>` — the image, the paragraph, the button — becomes the `children` prop. The `Card` component doesn't need to know what's inside it. It just renders whatever it receives.
+
+This pattern is used constantly for layout wrappers, modals, panels, and any component that acts as a visual container.
+
+## Props Are One-Way and Read-Only
+
+Data in React flows in one direction: **downward**, from parent to child. A parent passes props to a child; the child uses them but cannot change them.
+
+```tsx
+function Child({ count }: { count: number }) {
+  // This would be wrong:
+  // count++  — never mutate a prop
+
+  // The parent controls this value. The child just displays it.
+  return <p>Count: {count}</p>
+}
+```
+
+This one-way flow is intentional. It makes your application much easier to reason about — when something changes on screen, you always know the change originated in the parent that owns the data.
+
+If a child needs to trigger a change (say, a button click that updates a value), the parent passes down a *callback function* as a prop. The child calls that function, and the parent handles the update. You'll see exactly how that works in the next few lessons when we cover state and events.
+
+## Passing Objects and Arrays as Props
+
+Props aren't limited to simple strings and numbers. You can pass any JavaScript value — including objects and arrays.
+
+### Passing an object
+
+```tsx
+interface User {
+  name: string
+  email: string
+  avatar: string
+}
+
+function Avatar({ user }: { user: User }) {
+  return (
+    <div>
+      <img src={user.avatar} alt={user.name} />
+      <p>{user.name} — {user.email}</p>
+    </div>
+  )
+}
+
+// Usage
+const currentUser = { name: 'Alice', email: 'alice@example.com', avatar: '/alice.jpg' }
+
+function App() {
+  return <Avatar user={currentUser} />
+}
+```
+
+Grouping related values into an object like this keeps the call site tidy. Instead of `<Avatar name="Alice" email="..." avatar="..." />`, you pass one coherent piece of data.
+
+### Passing an array
+
+```tsx
+function TagList({ tags }: { tags: string[] }) {
+  return (
+    <ul>
+      {tags.map(tag => (
+        <li key={tag}>{tag}</li>
+      ))}
+    </ul>
+  )
+}
+
+<TagList tags={['react', 'typescript', 'nextjs']} />
+```
+
+The `key` prop on the `<li>` is required whenever you render a list — React uses it to track which item is which. We'll cover this in more depth in the lists and keys lesson.
+
+## Key Takeaways
+
+- Props are how you pass data from a parent component to a child component — they work like HTML attributes but can carry any JavaScript value.
+- Strings can use quotes (`name="Alice"`) but numbers, booleans, objects, arrays, and variables always need curly braces (`age={30}`).
+- Destructuring props in the function parameters (`{ label, color }`) is cleaner than accessing them via `props.label`.
+- Default values (`color = 'blue'`) apply when a prop is omitted or `undefined`, but not when it's `null`.
+- The `children` prop captures any JSX nested between a component's opening and closing tags, making it ideal for layout wrappers.
+- Props flow one way — downward from parent to child — and are read-only inside the component that receives them.
+- You can pass any JavaScript value as a prop, including objects and arrays.

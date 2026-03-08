@@ -1,0 +1,240 @@
+---
+title: "State: Making Components Interactive"
+day: 3
+description: "Learn how useState works, why regular variables fail for interactive UIs, and how to update state correctly."
+quiz:
+  - question: "Why can't you use a regular `let` variable to track a click count in a React component?"
+    options:
+      - "JavaScript doesn't allow variables inside functions"
+      - "Every time React re-renders the component, it calls the function again and the variable resets to its initial value"
+      - "Regular variables can only hold strings, not numbers"
+    correct: 1
+    explanation: "A React component is just a function. Every render is a fresh call to that function, which means every local variable starts over from scratch. Writing let count = 0 inside a component means count will always be 0 at the start of each render — any changes made during the previous render are lost. useState solves this by storing the value outside the component function, so it survives between renders."
+  - question: "You call `setCount(count + 1)` three times in a row inside one click handler. The current value of `count` is 5. What will `count` be after the click?"
+    options:
+      - "8, because each call increments the previous result"
+      - "6, because all three calls read the same snapshot value of 5"
+      - "The component will throw an error for calling the setter multiple times"
+    correct: 1
+    explanation: "State is a snapshot. When the click handler runs, `count` is frozen at 5 for the entire duration of that handler. All three calls to setCount(count + 1) read the same value — 5 — and each schedules the next render with count = 6. The last write wins, so the result is 6, not 8. To accumulate multiple updates, use the updater function form: setCount(prev => prev + 1), which operates on the latest queued value instead of the captured snapshot."
+  - question: "You have `const [user, setUser] = useState({ name: 'Alice', age: 30 })`. How do you correctly update just the `age` field?"
+    options:
+      - "user.age = 31; setUser(user)"
+      - "setUser({ ...user, age: 31 })"
+      - "setUser(user.age = 31)"
+    correct: 1
+    explanation: "React detects state changes by checking whether the new value is a different reference from the old one. If you mutate the existing object (user.age = 31) and then pass the same object reference to setUser, React sees no change and skips the re-render — your UI stays stale. The correct approach is to create a brand new object using the spread operator: { ...user, age: 31 }. This copies all existing fields and overrides just the one you want to change, giving React a new reference to detect."
+---
+
+You now know how to build components and pass data into them with props. But everything so far has been static — the component renders, displays its data, and that's it. Nothing changes.
+
+Real applications respond to users. Buttons get clicked, forms get filled in, items get added to lists. To build that kind of interactivity, you need **state**.
+
+## Why Props Aren't Enough
+
+Props come from outside the component. They're great for displaying data that the parent controls. But what about data that *changes inside the component* in response to something the user does?
+
+Your first instinct might be to use a regular variable:
+
+```tsx
+// This does NOT work
+function Counter() {
+  let count = 0  // resets to 0 on every render!
+
+  return (
+    <button onClick={() => { count++; console.log(count) }}>
+      Clicked {count} times
+    </button>
+  )
+}
+```
+
+If you try this, you'll notice something strange: the `console.log` does print increasing numbers, but the button label always shows "Clicked 0 times." What's going on?
+
+A React component is a function. Every time React needs to update the screen, it **calls that function again** — that's a render. When `Counter` re-renders, `let count = 0` runs again, resetting the variable to zero. Any changes from the previous render are thrown away.
+
+Regular variables don't survive between renders. You need a way to store a value that *persists* across renders and, crucially, *triggers a re-render* when it changes. That's exactly what `useState` provides.
+
+## Introducing useState
+
+```tsx
+import { useState } from 'react'
+
+function Counter() {
+  const [count, setCount] = useState(0)
+  //     ↑ current value  ↑ setter function   ↑ initial value
+
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Clicked {count} times
+    </button>
+  )
+}
+```
+
+`useState` returns an array with exactly two items. The first is the current value; the second is a function you call to change it. The `const [count, setCount]` syntax is standard JavaScript array destructuring — you're naming those two items at the same time.
+
+The argument you pass to `useState(0)` is the **initial value**. It's only used on the very first render; after that, React tracks the current value itself.
+
+The naming convention is `[thing, setThing]`. You can name them anything, but following this pattern makes code immediately readable.
+
+When you call `setCount(count + 1)`, React does two things:
+1. Saves the new value.
+2. Schedules a re-render of the component.
+
+On the next render, `useState(0)` returns the new saved value — not `0` — so `count` now reflects the updated number.
+
+## State Is a Snapshot
+
+This is the most important thing to understand about state, and it trips up almost every developer at first.
+
+When your component function runs, `count` gets a specific value — say, `5`. That value is **frozen** for the entire execution of that render. It doesn't matter what you do; `count` will be `5` until the next render begins.
+
+```tsx
+function SnapshotDemo() {
+  const [count, setCount] = useState(0)
+
+  function handleClick() {
+    console.log(count)      // let's say this is 5
+    setCount(count + 1)     // schedules: next render, count = 6
+    console.log(count)      // still 5 — hasn't changed yet
+    setCount(count + 1)     // also schedules: next render, count = 6 (not 7!)
+    setCount(count + 1)     // also schedules: next render, count = 6 (not 8!)
+    // All three calls read the same frozen snapshot of count (5)
+    // After this click, count becomes 6 — not 8
+  }
+
+  return <button onClick={handleClick}>{count}</button>
+}
+```
+
+All three `setCount` calls see the same `count` of `5`. Each one schedules a render where `count` should be `6`. The last scheduled value wins, so the result after the click is `6`, not `8`.
+
+This isn't a bug — it's a deliberate design. It makes each render predictable: the values you see are consistent throughout a single render cycle.
+
+## The Updater Function
+
+What if you genuinely need three separate increments from one click? Use the **updater function** form:
+
+```tsx
+function handleClick() {
+  setCount(prev => prev + 1)  // queues: whatever the latest value is, add 1
+  setCount(prev => prev + 1)  // queues: whatever that result was, add 1 again
+  setCount(prev => prev + 1)  // queues: and again
+  // Result: count goes from 5 to 8
+}
+```
+
+Instead of passing the new value directly, you pass a function. React calls each queued function in order, passing the result of the previous one as `prev`. This lets updates accumulate correctly.
+
+**Rule of thumb:** use the `(prev) => newValue` form whenever the new state depends on the previous state, especially inside loops or when firing multiple updates in one handler.
+
+## Updating Objects in State
+
+When your state is an object, you have to be careful: **never mutate the object directly**.
+
+React detects changes by checking whether the new value is a *different reference* from the old one. If you change a property on the existing object and pass that same object to the setter, React looks at it and says "same object, nothing changed" — and skips the re-render.
+
+```tsx
+interface User {
+  name: string
+  age: number
+}
+
+function UserEditor() {
+  const [user, setUser] = useState<User>({ name: 'Alice', age: 30 })
+
+  function handleBirthday() {
+    // WRONG — mutates the existing object; React won't re-render
+    user.age++
+    setUser(user)
+
+    // CORRECT — create a brand new object
+    setUser({ ...user, age: user.age + 1 })
+  }
+
+  return (
+    <div>
+      <p>{user.name} is {user.age} years old</p>
+      <button onClick={handleBirthday}>Happy birthday!</button>
+    </div>
+  )
+}
+```
+
+The spread syntax `{ ...user, age: user.age + 1 }` creates a new object that copies every field from `user` and then overrides `age` with the new value. React receives a new reference, detects the change, and re-renders.
+
+## Updating Arrays in State
+
+The same rule applies to arrays: don't mutate them. Instead, produce a new array.
+
+```tsx
+function TodoList() {
+  const [todos, setTodos] = useState(['Buy groceries', 'Walk dog'])
+
+  function addTodo(text: string) {
+    setTodos([...todos, text])                               // add to end
+  }
+
+  function removeTodo(index: number) {
+    setTodos(todos.filter((_, i) => i !== index))            // remove by index
+  }
+
+  function updateTodo(index: number, text: string) {
+    setTodos(todos.map((t, i) => (i === index ? text : t)))  // update by index
+  }
+
+  return (
+    <ul>
+      {todos.map((todo, i) => (
+        <li key={i}>
+          {todo}
+          <button onClick={() => removeTodo(i)}>Remove</button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+The pattern is always the same: use array methods that return a *new* array (`filter`, `map`, spread) rather than methods that modify the existing one (`push`, `pop`, `splice`).
+
+## Multiple State Variables
+
+A component can have as many `useState` calls as it needs. Each one is independent — updating one doesn't affect the others.
+
+```tsx
+function SignupForm() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  async function handleSubmit() {
+    setIsSubmitting(true)
+    await submitToServer({ name, email })
+    setIsSubmitting(false)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" />
+      <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" />
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Submitting...' : 'Sign up'}
+      </button>
+    </form>
+  )
+}
+```
+
+A good rule of thumb: group values into a single state object when they always change together; keep them separate when they change independently.
+
+## Key Takeaways
+
+- Regular variables reset on every render, so they can't track changing data across user interactions — that's what `useState` is for.
+- `useState(initialValue)` returns `[currentValue, setter]`. The initial value is only used on the first render.
+- Calling the setter schedules a re-render; the new value appears on the *next* render, not immediately.
+- State is a snapshot: within a single render, a state variable has one frozen value. Multiple `setX(value)` calls in one handler all read the same snapshot.
+- Use the updater form `setX(prev => ...)` when the new value depends on the previous one, to avoid stale snapshot bugs.
+- Never mutate state objects or arrays directly. Always create a new object (via spread) or a new array (via `map`, `filter`, spread) so React can detect the change.
+- A component can have multiple `useState` calls; each is tracked independently.

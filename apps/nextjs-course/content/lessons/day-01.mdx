@@ -1,0 +1,223 @@
+---
+title: "What is React? Components and JSX"
+day: 1
+description: "Learn the two foundational ideas behind React: building UIs from components, and writing markup with JSX."
+quiz:
+  - question: "A JSX expression returns two sibling elements with no wrapper — <h1>Title</h1><p>Body</p>. What happens?"
+    options:
+      - "React automatically wraps them in a <div>, so it works fine."
+      - "This is a syntax error — JSX must return exactly one root element. Wrap them in a Fragment (<>...</>) to fix it."
+      - "It works as long as both elements are block-level HTML elements."
+    correct: 1
+    explanation: "JSX compiles to a JavaScript expression, and a JavaScript expression can only return one value. Two adjacent elements with no parent are two separate values, which is a syntax error. The fix is to wrap them in a React Fragment — written as `<>...</>` — which groups elements without adding an extra DOM node. Neither the type of HTML element (block vs inline) nor React's behavior has any bearing on this rule; it is a fundamental constraint of how JSX translates to JavaScript."
+  - question: "Why do you write className instead of class in JSX?"
+    options:
+      - "It is just a React convention with no technical reason — either one would work."
+      - "class is a reserved keyword in JavaScript, so JSX uses className to avoid a conflict when the code is compiled."
+      - "className applies styles directly without a CSS file, while class requires an external stylesheet."
+    correct: 1
+    explanation: "In JavaScript, `class` is a reserved keyword used to define classes (as in object-oriented programming). Since JSX compiles down to JavaScript, using `class` as an attribute name would cause a parsing error. React therefore maps the HTML `class` attribute to the JSX prop `className`. The same logic applies to `for`, which becomes `htmlFor` on `<label>` elements because `for` is also a reserved word in JavaScript (used in for loops). Option A is incorrect — there is a concrete technical reason. Option C is entirely wrong — `className` still refers to a CSS class; it does not change how styles are applied."
+  - question: "You write a React component called <myButton />. It renders nothing and no error appears in the console about the component being undefined. What is the most likely explanation?"
+    options:
+      - "React treats any lowercase tag as a built-in HTML element. Since there is no <mybutton> HTML element, it renders an unknown element — not your component."
+      - "React silently ignores any component whose name contains a capital letter mixed with lowercase."
+      - "myButton is a valid component name; the issue must be somewhere else in the code."
+    correct: 0
+    explanation: "React uses the capitalization of the tag name to decide whether it is a built-in HTML element or a user-defined component. A lowercase tag like `<mybutton>` is treated as an HTML element — React passes it straight to the DOM. Since `<mybutton>` is not a real HTML element, the browser renders an empty unknown element and no error is thrown. Your component function is never called. The fix is to rename it `MyButton` and use `<MyButton />`. This capitalization rule is how React distinguishes between the two categories, so it is non-negotiable."
+---
+
+React is a JavaScript library for building user interfaces. That definition is short, but it contains an important word: *library*. React is not a full framework that tells you how to organize every part of your app. It is a focused tool that does one thing extremely well — it helps you build UIs out of small, reusable pieces called **components**.
+
+In this lesson you will learn what components are, how to write them, and how JSX — the syntax that makes components readable — actually works under the hood.
+
+## The Core Idea: UI as a Function of Data
+
+Before writing any code, it helps to understand the mental model React is built on:
+
+> **Your UI is a function of your data. When the data changes, the UI updates automatically.**
+
+If you have ever built a spreadsheet, you understand this intuitively. When a cell's value changes, every formula that depends on it recalculates automatically. You do not manually reach into each dependent cell and update it — the relationship is declared once and the spreadsheet engine handles the rest.
+
+React works the same way. You declare what the UI should look like for a given piece of data, and when that data changes, React figures out the minimum set of DOM updates needed to reflect the new state.
+
+## What is a Component?
+
+A React component is a JavaScript function that returns UI. Here is the simplest possible example:
+
+```jsx
+function Greeting() {
+  return <h1>Hello, world!</h1>
+}
+```
+
+That is a complete, valid React component. It is a function called `Greeting` that returns what looks like HTML. You can use it in your app like an HTML tag:
+
+```jsx
+<Greeting />
+```
+
+React will call the `Greeting` function and use the returned markup to update the DOM.
+
+This is the component model: instead of one giant HTML file, you build an app by composing small, named pieces of UI. A button is a component. A navigation bar is a component (probably built from several smaller components). A whole page is a component.
+
+## What is JSX?
+
+The `<h1>Hello, world!</h1>` syntax inside a JavaScript function is called **JSX**. It looks like HTML, but it is not — it is a syntax extension for JavaScript that gets compiled into plain JavaScript function calls before it runs in the browser.
+
+JSX exists because describing UI in plain JavaScript is verbose and hard to read. Here is the same component without JSX:
+
+```jsx
+// JSX
+function Greeting() {
+  return <h1 className="title">Hello, world!</h1>
+}
+
+// What the compiler turns it into — plain JavaScript
+function Greeting() {
+  return React.createElement('h1', { className: 'title' }, 'Hello, world!')
+}
+```
+
+Both versions do exactly the same thing. JSX is syntactic sugar — a more readable way to write `React.createElement` calls. You will almost never write `React.createElement` directly, but knowing this translation exists helps JSX feel less magical.
+
+## JSX Rules You Must Know
+
+Because JSX compiles to JavaScript, it has rules that differ from HTML. These rules trip up nearly every beginner, so read them carefully.
+
+### One Root Element
+
+A JSX expression must return exactly one root element. Think about why: JSX compiles to a single `React.createElement(...)` call, which is a single JavaScript value. You cannot return two values from one expression.
+
+```jsx
+// ERROR — two root elements, no parent
+function Profile() {
+  return (
+    <h1>Alice</h1>
+    <p>Software engineer</p>
+  )
+}
+
+// CORRECT — wrapped in a Fragment
+function Profile() {
+  return (
+    <>
+      <h1>Alice</h1>
+      <p>Software engineer</p>
+    </>
+  )
+}
+```
+
+The `<>...</>` syntax is a **Fragment** — a React wrapper that groups elements without adding any extra node to the DOM. Use it whenever you need multiple sibling elements but do not want to add a meaningless `<div>`.
+
+### className, Not class
+
+In JavaScript, `class` is a reserved keyword used to define classes. To avoid a conflict, JSX uses `className` instead of `class` for the CSS class attribute. Similarly, `for` (used on `<label>` elements to associate them with an input) becomes `htmlFor`.
+
+```jsx
+// HTML
+<p class="intro">Welcome</p>
+<label for="email">Email</label>
+
+// JSX equivalents
+<p className="intro">Welcome</p>
+<label htmlFor="email">Email</label>
+```
+
+### Self-Closing Tags
+
+In HTML, some elements like `<img>`, `<input>`, and `<br>` do not have closing tags. In JSX, every element must be explicitly closed — either with a matching closing tag or a self-closing slash.
+
+```jsx
+// HTML (valid but loose)
+<img src="/logo.png" alt="Logo">
+<input type="text">
+
+// JSX (must be self-closed)
+<img src="/logo.png" alt="Logo" />
+<input type="text" />
+```
+
+### JavaScript Expressions in Curly Braces
+
+Curly braces `{}` are the escape hatch from JSX back into JavaScript. Anything inside `{}` is evaluated as a JavaScript expression.
+
+```jsx
+function UserCard() {
+  const name = 'Alice'
+  const isAdmin = true
+  const score = 42
+
+  return (
+    <>
+      <h1 className="title">Hello, {name}</h1>
+      {/* Comments in JSX look like this */}
+      <p>Score: {score * 2}</p>
+      <p>{isAdmin ? 'Admin user' : 'Regular user'}</p>
+      <img src="/avatar.png" alt="Profile" />
+    </>
+  )
+}
+```
+
+You can put any JavaScript *expression* inside `{}` — variables, arithmetic, ternary operators, function calls. What you cannot do is use *statements* like `if/else` blocks or `for` loops directly inside JSX. For conditional rendering, use a ternary (`condition ? a : b`) or the `&&` short-circuit (`condition && <Element />`). For loops, use `.map()`.
+
+## Composing Components
+
+The real power of the component model appears when you compose components together. A component can render other components, exactly like using an HTML element.
+
+```jsx
+function Button() {
+  return <button className="btn">Click me</button>
+}
+
+function App() {
+  return (
+    <div>
+      <h1>My App</h1>
+      <Button />
+      <Button />
+      <Button />
+    </div>
+  )
+}
+```
+
+`App` renders three `Button` components. Each `Button` is an independent instance of that function. You have defined the UI logic once and reused it three times without copying any code.
+
+This composability is what makes large React applications manageable. Instead of a single massive HTML file, you have a tree of components — each responsible for one piece of the UI, each small enough to understand on its own.
+
+## The Capital Letter Rule
+
+React uses a simple rule to distinguish built-in HTML elements from your own components: **capitalization**.
+
+- Lowercase tag → HTML element: `<div>`, `<button>`, `<input>`
+- Capital letter tag → React component: `<Button>`, `<UserCard>`, `<App>`
+
+```jsx
+// This renders a native HTML <button> element
+<button>Click</button>
+
+// This calls your Button function component
+<Button />
+```
+
+This rule is non-negotiable. If you name a component `myButton` and use `<myButton />`, React will treat it as an unknown HTML element and never call your function. Always start component names with a capital letter.
+
+## When Does a Component Re-render?
+
+You now know that React calls your component function and uses the return value to build the DOM. But what causes React to call the function again?
+
+The short answer: when a component's **state** changes, React re-renders that component (calls the function again) and updates the DOM with the new output.
+
+You have not learned about state yet — that comes on Day 3. For now, just hold onto this mental model: component functions can be called multiple times, and each call should return the correct UI for the current data. Keep your component functions *pure* — they should return the same output for the same input, without reaching outside themselves to modify things.
+
+## Key Takeaways
+
+- React is a JavaScript library for building UIs from reusable components — functions that return markup.
+- The core idea: your UI is a function of your data. When data changes, React re-renders automatically.
+- JSX is syntactic sugar over `React.createElement` calls — it is not HTML, even though it looks similar.
+- Critical JSX rules: one root element per return (use `<>...</>` Fragments), `className` not `class`, self-close all tags, and use `{}` for JavaScript expressions.
+- You cannot use `if` or `for` statements directly inside JSX — use ternaries and `.map()` instead.
+- Component names must start with a capital letter; lowercase tags are treated as built-in HTML elements.
+- Composing components — rendering components inside other components — is how you build large UIs from small, understandable pieces.

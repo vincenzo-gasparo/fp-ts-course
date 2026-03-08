@@ -1,0 +1,249 @@
+---
+title: "Styling: Tailwind CSS and CSS Modules"
+day: 14
+description: "Learn the two most practical styling approaches in Next.js: utility-first Tailwind CSS and locally-scoped CSS Modules."
+quiz:
+  - question: "You write `md:flex-row` on an element. On which screen sizes does this apply?"
+    options:
+      - "Only on small/medium screens, not large ones"
+      - "On screens 768px wide and above"
+      - "Only on screens smaller than 768px"
+    correct: 1
+    explanation: "Tailwind is mobile-first. The `md:` prefix means the class kicks in at the `md` breakpoint (768px) and stays active on all larger screens too. The unprefixed class (e.g., `flex-col`) is your mobile baseline. A common mistake is reading `md:` as 'medium-only' — it actually means 'medium and up'."
+  - question: "What problem do CSS Modules solve that plain CSS files do not?"
+    options:
+      - "They allow you to write CSS inside JavaScript template literals"
+      - "They automatically scope class names so two components can use the same name without conflicting"
+      - "They make CSS load faster by splitting it into smaller files"
+    correct: 1
+    explanation: "CSS Modules transform class names like `.card` into unique identifiers like `card_card__xKj2a` at build time. This means two completely unrelated components can both define a `.card` class and they will never interfere with each other. Plain CSS files share a global namespace, so a `.card` in one file can accidentally override a `.card` in another."
+  - question: "When does Tailwind's `dark:` prefix apply its styles?"
+    options:
+      - "On screens with a dark physical display"
+      - "Only when the user has set their OS to dark mode, regardless of configuration"
+      - "When dark mode is active — either via the `.dark` class on `<html>` or the OS preference, depending on your Tailwind configuration"
+    correct: 2
+    explanation: "Tailwind supports two dark mode strategies: `media` (uses the OS `prefers-color-scheme` setting) and `class` (applies dark styles when a `.dark` class is present on the `<html>` element). The default in Tailwind v3+ is `class`, which gives you programmatic control. Either way, `dark:` styles are inactive by default and only switch on when the condition is met."
+---
+
+By this point you have a working Next.js application with pages, data fetching, and server components. What you haven't tackled yet is making it look good. This lesson covers the two most widely used styling approaches in the Next.js ecosystem: **Tailwind CSS** and **CSS Modules**. Both come pre-configured in a fresh Next.js project, and they work well together.
+
+## Tailwind CSS — Styling Without Leaving Your JSX
+
+Tailwind CSS is a "utility-first" CSS framework. Instead of writing a separate CSS file with class names you invent, you compose styles directly on elements using small, single-purpose classes that Tailwind provides.
+
+Here is the same button written both ways:
+
+```tsx
+// Traditional approach — you write a CSS file separately
+<button className="primary-button">Save</button>
+
+// With Tailwind — all styling lives right here
+<button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+  Save
+</button>
+```
+
+The second button has no external CSS file. Every visual property — background color, text color, padding, border radius, hover state — is expressed as a Tailwind class directly in the JSX.
+
+This feels odd at first. You may have been taught to keep HTML and CSS separate. The practical benefit is that you can understand, change, and delete a component's styles without ever hunting through CSS files. Everything is co-located.
+
+### The Common Classes You Will Use Every Day
+
+Tailwind has hundreds of classes, but you will reach for a small subset constantly. Here is a mental map:
+
+| Category | Example classes |
+|----------|----------------|
+| Layout | `flex`, `grid`, `block`, `hidden`, `items-center`, `justify-between` |
+| Spacing | `p-4`, `px-6`, `py-2`, `m-4`, `mt-8`, `gap-4` |
+| Sizing | `w-full`, `h-48`, `max-w-3xl`, `min-h-screen` |
+| Typography | `text-xl`, `text-sm`, `font-bold`, `font-medium`, `leading-relaxed` |
+| Colors | `bg-blue-600`, `text-white`, `text-zinc-600`, `border-gray-200` |
+| Borders | `border`, `rounded`, `rounded-lg`, `rounded-full`, `border-zinc-300` |
+| Effects | `shadow`, `shadow-lg`, `opacity-50`, `transition`, `cursor-pointer` |
+
+Tailwind's spacing scale is based on multiples of 4px: `p-1` = 4px, `p-2` = 8px, `p-4` = 16px, `p-8` = 32px. Once this clicks, you stop guessing pixel values.
+
+### Responsive Design
+
+Tailwind uses a **mobile-first** approach. You write the mobile layout first, then add prefixed classes that override those styles at larger screen sizes.
+
+```tsx
+<div className="
+  flex flex-col
+  md:flex-row
+  gap-4
+">
+  <aside className="
+    w-full
+    md:w-64
+  ">
+    Sidebar
+  </aside>
+  <main className="flex-1">
+    Main content
+  </main>
+</div>
+```
+
+On a phone, `flex-col` stacks the sidebar above the main content and `w-full` makes the sidebar full-width. On a screen 768px or wider, `md:flex-row` switches to a horizontal layout and `md:w-64` gives the sidebar a fixed 256px width.
+
+The breakpoints are: `sm` (640px), `md` (768px), `lg` (1024px), `xl` (1280px), `2xl` (1536px).
+
+**Common misconception:** `sm:` does not mean "small screens only." It means "640px and above." The unprefixed class is always the mobile (smallest) baseline.
+
+### Dark Mode
+
+Tailwind supports dark mode with the `dark:` prefix:
+
+```tsx
+<div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+  <h1 className="text-2xl font-bold">Title</h1>
+  <p className="text-gray-600 dark:text-gray-300">
+    This text is lighter in both modes for readability.
+  </p>
+</div>
+```
+
+The `dark:` variants activate when dark mode is on. How "dark mode is on" is defined depends on your Tailwind configuration — it can follow the user's OS preference (`prefers-color-scheme: dark`) or respond to a `.dark` class on the `<html>` element. The class-based approach lets you build a toggle button.
+
+## CSS Modules — Scoped Styles When You Need Them
+
+CSS Modules are a different tool that solves a different problem: **style isolation**. When you have a large project with many components, it is very easy for CSS class names to collide. Two developers both write a `.card` class and one silently overrides the other.
+
+CSS Modules solve this by **automatically making every class name unique** at build time. You write normal CSS, but Next.js transforms the class names so they only affect the one component they were written for.
+
+### How to Use CSS Modules
+
+Create a CSS file with the `.module.css` extension next to your component:
+
+```
+components/
+  card.tsx
+  card.module.css
+```
+
+```css
+/* components/card.module.css */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+```
+
+```tsx
+// components/card.tsx
+import styles from './card.module.css'
+
+interface CardProps {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}
+
+export function Card({ title, subtitle, children }: CardProps) {
+  return (
+    <div className={styles.card}>
+      <h3 className={styles.title}>{title}</h3>
+      {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
+      {children}
+    </div>
+  )
+}
+```
+
+You import `styles` as a JavaScript object and access class names as properties. At build time, `styles.card` becomes something like `card_card__xKj2a` — a unique string that can never clash with any other component's `.card` class.
+
+### Mixing Tailwind and CSS Modules
+
+You are not forced to choose one or the other. Many teams use Tailwind for layout, spacing, and color, and reach for CSS Modules when they need something Tailwind makes awkward — complex animations, multi-step pseudo-selectors, or styles that simply feel cleaner as a CSS block.
+
+```tsx
+import styles from './card.module.css'
+
+// Combine a CSS Module class with Tailwind utilities
+export function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={`${styles.card} flex flex-col gap-4`}>
+      {children}
+    </div>
+  )
+}
+```
+
+Conditional classes with Tailwind are a common pattern too:
+
+```tsx
+<button
+  className={`
+    px-4 py-2 rounded font-medium transition-colors
+    ${isActive
+      ? 'bg-blue-600 text-white hover:bg-blue-700'
+      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }
+  `}
+>
+  Toggle
+</button>
+```
+
+For more complex conditional logic, the `clsx` or `cn` utility (a thin wrapper around `clsx` and `tailwind-merge`) keeps things readable:
+
+```tsx
+import { cn } from '@/lib/utils'
+
+<button className={cn(
+  'px-4 py-2 rounded font-medium transition-colors',
+  isActive && 'bg-blue-600 text-white',
+  !isActive && 'bg-gray-100 text-gray-700',
+  isDisabled && 'opacity-50 cursor-not-allowed',
+)}>
+  Toggle
+</button>
+```
+
+### Global Styles
+
+Every Next.js project has a `globals.css` file imported in `app/layout.tsx`. This is the right place for:
+
+- CSS resets
+- Custom CSS variables (design tokens like `--color-brand`)
+- `@font-face` declarations
+- Base element styles you want everywhere
+
+Everything else should be scoped — either through Tailwind utilities applied directly on elements, or through CSS Modules for component-specific rules.
+
+## When to Use Which Approach
+
+| Situation | Recommended approach |
+|-----------|---------------------|
+| Layout, spacing, typography, responsive design | Tailwind utilities |
+| Hover/focus/active states | Tailwind (`hover:`, `focus:`, `active:`) |
+| Complex animations with keyframes | CSS Modules |
+| Pseudo-elements (`::before`, `::after`) | CSS Modules |
+| Overriding a third-party component's styles | CSS Modules with `:global()` |
+| Site-wide base styles and CSS variables | `globals.css` |
+
+Neither approach is universally superior. Tailwind excels when you want to move fast and keep styles co-located with markup. CSS Modules excel when you have complex style logic that reads more clearly as a dedicated CSS block.
+
+## Key Takeaways
+
+- Tailwind CSS gives you utility classes to style elements directly in JSX, eliminating the need to name and manage separate CSS classes for most cases.
+- Tailwind is mobile-first: the unprefixed class is the mobile baseline, and breakpoint prefixes like `md:` apply at that width and above — not "only on that screen size."
+- CSS Modules automatically scope class names to the file they are declared in, preventing naming conflicts across components.
+- You can mix both approaches freely — Tailwind for layout and spacing, CSS Modules for complex or component-specific styles.
+- The `dark:` prefix in Tailwind applies styles only when dark mode is active, controllable via OS preference or a `.dark` class on `<html>`.
+- `globals.css` is for site-wide base styles; everything else should be component-scoped.
