@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useProgress } from './progress-provider'
+import { useStore } from '@nanostores/react'
+import { completedDaysStore } from '../lib/progress-store'
 
 interface Lesson {
   day: number
@@ -15,17 +15,16 @@ interface Props {
 }
 
 export function DayCardList({ lessons }: Props) {
-  const { isComplete } = useProgress()
+  const completedDays = useStore(completedDaysStore)
 
   return (
     <div className="grid gap-4">
       {lessons.map((lesson) => {
-        const slug = lesson.slug.split('/').pop()!
-        const done = isComplete(lesson.day)
+        const done = completedDays.has(lesson.day)
         return (
-          <Link
+          <a
             key={lesson.day}
-            href={`/lessons/${slug}`}
+            href={`/lessons/${lesson.slug}`}
             data-testid="day-card"
             data-day={lesson.day}
             data-complete={done ? 'true' : 'false'}
@@ -47,7 +46,7 @@ export function DayCardList({ lessons }: Props) {
                 <div className="text-sm text-zinc-500">{lesson.description}</div>
               )}
             </div>
-          </Link>
+          </a>
         )
       })}
     </div>

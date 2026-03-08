@@ -1,21 +1,29 @@
 'use client'
 
-import { useProgress } from './progress-provider'
+import { useStore } from '@nanostores/react'
+import { completedDaysStore } from '../lib/progress-store'
 
 interface Props {
   day: number
 }
 
 export function MarkCompleteButton({ day }: Props) {
-  const { isComplete, toggleDay } = useProgress()
-  const done = isComplete(day)
+  const completedDays = useStore(completedDaysStore)
+  const done = completedDays.has(day)
+
+  const toggle = () => {
+    const next = new Set(completedDays)
+    if (next.has(day)) next.delete(day)
+    else next.add(day)
+    completedDaysStore.set(next)
+  }
 
   return (
     <button
       data-testid="mark-complete-btn"
       data-complete={done ? 'true' : 'false'}
       aria-pressed={done}
-      onClick={() => toggleDay(day)}
+      onClick={toggle}
       className={[
         'rounded-md px-4 py-2 text-sm font-medium transition-colors border',
         done

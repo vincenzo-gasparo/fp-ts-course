@@ -1,13 +1,14 @@
 'use client'
 
-import { useProgress } from './progress-provider'
+import { useStore } from '@nanostores/react'
+import { completedDaysStore } from '../lib/progress-store'
 
 interface Props {
   total: number
 }
 
 export function ProgressBar({ total }: Props) {
-  const { completedDays } = useProgress()
+  const completedDays = useStore(completedDaysStore)
   const completed = completedDays.size
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
