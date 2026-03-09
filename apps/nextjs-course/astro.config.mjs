@@ -6,7 +6,7 @@ import expressiveCode from 'astro-expressive-code'
 import { courseIntegration } from '@courses/ui'
 import courseConfig from './course.config'
 
-const base = process.env.CI ? '/astro-courses/nextjs-course' : ''
+const base = process.env.CI ? '/astro-courses/nextjs-course/' : '/'
 
 export default defineConfig({
   output: 'static',
