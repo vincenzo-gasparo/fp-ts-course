@@ -1,18 +1,18 @@
 ---
 import '../styles/global.css'
 
-const isDev = import.meta.env.DEV
+const isCI = import.meta.env.CI
 
 const courses = [
   {
     title: 'fp-ts Course',
     description: '15 structured days to confident functional TypeScript.',
-    href: isDev ? 'http://localhost:3000' : './fp-ts-course/',
+    href: isCI ? './fp-ts-course/' : 'http://localhost:3000',
   },
   {
     title: 'Next.js Course',
     description: '16 structured days from zero to a deployed Next.js app.',
-    href: isDev ? 'http://localhost:3001' : './nextjs-course/',
+    href: isCI ? './nextjs-course/' : 'http://localhost:3001',
   },
 ]
 ---

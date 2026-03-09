@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { loadProgress, saveProgress } from '@courses/ui/lib/progress'
+import { loadProgress, saveProgress } from './progress'
 
-const STORAGE_KEY = 'nextjs-course:progress'
+const STORAGE_KEY = 'fp-ts-course:progress'
 
 // Mock localStorage for node environment
 const localStorageMock = (() => {

@@ -7,8 +7,11 @@
     "dev:nextjs": "pnpm --filter nextjs-course dev",
     "dev:all": "pnpm --parallel --filter './apps/*' dev",
     "build:all": "pnpm --filter './apps/*' build",
+    "preview:fp-ts": "pnpm --filter fp-ts-course preview",
+    "preview:nextjs": "pnpm --filter nextjs-course preview",
+    "preview:all": "pnpm build:all && pnpm --parallel --filter './apps/*' preview",
     "lint:all": "pnpm --filter './apps/*' lint",
-    "test:unit": "pnpm --filter './apps/*' run test:unit",
+    "test:unit": "pnpm --filter './packages/*' run test:unit",
     "test:all": "pnpm test:unit && pnpm typecheck && pnpm lint:all",
     "typecheck": "pnpm --filter './apps/*' --filter './packages/*' exec tsc --noEmit",
     "clean": "find . -not -path '*/node_modules/*' \\( -name 'dist' -o -name '.astro' \\) -type d -exec rm -rf {} +"

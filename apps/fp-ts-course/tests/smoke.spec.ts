@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 // NAV-01: home page lists all 16 lessons (day-00 intro + 15 main lessons)
-test('home page lists 15 day cards with titles', async ({ page }) => {
+test('home page lists 16 day cards with titles', async ({ page }) => {
   await page.goto('/')
   const cards = page.locator('[data-testid="day-card"]')
   await expect(cards).toHaveCount(16)

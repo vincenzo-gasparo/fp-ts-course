@@ -10,6 +10,9 @@
     "./pages/index.astro": "./src/pages/index.astro",
     "./pages/lesson.astro": "./src/pages/lesson.astro"
   },
+  "scripts": {
+    "test:unit": "vitest run"
+  },
   "peerDependencies": {
     "astro": ">=5",
     "react": ">=19",
@@ -31,6 +34,7 @@
   "devDependencies": {
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

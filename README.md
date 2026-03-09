@@ -6,21 +6,27 @@ A pnpm monorepo for publishing structured MDX courses as static sites on GitHub 
 
 | Course | Path | Description |
 |--------|------|-------------|
-| [fp-ts Course](apps/fp-ts-course) | `apps/fp-ts-course` | 15-day structured course on functional TypeScript with fp-ts |
+| [fp-ts Course](apps/fp-ts-course) | `apps/fp-ts-course` | 16-day structured course on functional TypeScript with fp-ts |
+| [Next.js Course](apps/nextjs-course) | `apps/nextjs-course` | 16-day Next.js course from zero (React included) |
 
 ## Monorepo Structure
 
 ```
 apps/
+  home/                  # Landing page listing all courses
   fp-ts-course/          # Course app — only content + config
-    content/lessons/     # MDX lesson files (day-00.mdx … day-15.mdx)
+    src/content/lessons/ # MDX lesson files (day-00.mdx … day-15.mdx)
     course.config.ts     # Title, description, localStorage key
-    src/app/             # Next.js App Router pages (thin wrappers)
-    tests/               # Playwright E2E + Vitest unit tests
+    astro.config.mjs     # Astro config with shared integration
+    tests/               # Playwright E2E tests
+  nextjs-course/         # Same structure as fp-ts-course
 packages/
-  course-ui/             # Shared framework — components, lib, styles
-    src/components/      # CourseLayout, Quiz, ProgressBar, TOC, …
-    src/lib/             # MDX renderer, progress helpers, Velite plugins
+  course-ui/             # Shared framework (@courses/ui)
+    src/integration.ts   # Astro integration — injects routes + virtual module
+    src/pages/           # Shared index and lesson pages
+    src/components/      # React components (progress, quiz, TOC, …)
+    src/lib/             # Progress helpers, utilities + unit tests
+    src/styles/          # Global CSS + Tailwind theme
 ```
 
 ## Getting Started
@@ -29,25 +35,27 @@ packages/
 pnpm install
 
 # Run a specific course in dev mode
-pnpm dev:fp-ts
+pnpm dev:fp-ts    # localhost:3000
+pnpm dev:nextjs   # localhost:3001
 ```
-
-Open [http://localhost:3000](http://localhost:3000).
 
 ## Scripts
 
 | Script | Description |
 |--------|-------------|
+| `pnpm dev:home` | Dev server for home landing page |
 | `pnpm dev:fp-ts` | Dev server for fp-ts-course (port 3000) |
-| `pnpm dev:all` | Dev servers for all courses in parallel |
-| `pnpm build:all` | Production build for all courses |
-| `pnpm test:all` | Unit tests + typecheck + lint across all apps |
-| `pnpm test:unit` | Vitest unit tests across all apps |
+| `pnpm dev:nextjs` | Dev server for nextjs-course (port 3001) |
+| `pnpm dev:all` | Dev servers for all apps in parallel |
+| `pnpm build:all` | Production build for all apps |
+| `pnpm preview:fp-ts` | Serve fp-ts-course build locally (localhost:3000) |
+| `pnpm preview:nextjs` | Serve nextjs-course build locally (localhost:3001) |
+| `pnpm preview:all` | Build all + serve all locally in parallel |
+| `pnpm test:all` | Unit tests + typecheck + lint (full CI suite) |
+| `pnpm test:unit` | Vitest unit tests (`packages/course-ui`) |
 | `pnpm typecheck` | TypeScript check across all apps and packages |
 | `pnpm lint:all` | ESLint across all apps |
-| `pnpm clean` | Remove all build artifacts (`.next`, `out`, `.velite`) |
-
-> Each course app uses a fixed port (`fp-ts-course` → 3000, next course → 3001, etc.) so `dev:all` can run them in parallel without conflicts.
+| `pnpm clean` | Remove all build artifacts (`dist`, `.astro`) |
 
 ### E2E tests (per course)
 
@@ -62,14 +70,15 @@ pnpm --filter fp-ts-course exec playwright test
 
 ## Deployment
 
-All courses deploy to a single GitHub Pages site on every push to `main`:
+All apps deploy to a single GitHub Pages site on every push to `main`:
 
 ```
-username.github.io/<repo>/fp-ts-course
-username.github.io/<repo>/rust-course   # future courses
+username.github.io/<repo>/              ← home
+username.github.io/<repo>/fp-ts-course/
+username.github.io/<repo>/nextjs-course/
 ```
 
-Each course is built with its own `basePath` and merged into one deployment directory. See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+Each course is built with `CI=true`, which sets the correct `base` path and switches home page links from localhost URLs to relative paths. See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ## Adding a New Course
 
@@ -87,11 +96,11 @@ Each course is built with its own `basePath` and merged into one deployment dire
    }
    ```
 
-3. **Replace `content/lessons/*.mdx`** with your own lesson files.
+3. **Replace `src/content/lessons/*.mdx`** with your own lesson files.
 
-4. **Update `next.config.mjs`** — change `basePath` to `/my-new-course`.
+4. **Update `astro.config.mjs`** — change `base` path to `/my-new-course`.
 
-5. **Add to `deploy.yml`** — uncomment and duplicate the build + cp lines.
+5. **Add to `deploy.yml`** — duplicate the build + cp lines.
 
 6. **Add a dev script** to root `package.json`:
    ```json
@@ -100,10 +109,11 @@ Each course is built with its own `basePath` and merged into one deployment dire
 
 ## Tech Stack
 
-- [Next.js 15](https://nextjs.org) — App Router, static export
-- [Velite](https://velite.js.org) — MDX content pipeline
-- [Tailwind CSS v4](https://tailwindcss.com)
-- [rehype-pretty-code](https://rehype-pretty-code.netlify.app) + [Shiki](https://shiki.style) — syntax highlighting
+- [Astro 5](https://astro.build) — static site generation, content collections, MDX
+- [React 19](https://react.dev) — interactive components (progress, quizzes)
+- [Tailwind CSS v4](https://tailwindcss.com) — styling
+- [Expressive Code](https://expressive-code.com) — syntax-highlighted code blocks
+- [nanostores](https://github.com/nanostores/nanostores) — lightweight state management
 - [Playwright](https://playwright.dev) — E2E tests
 - [Vitest](https://vitest.dev) — unit tests
 - [pnpm workspaces](https://pnpm.io/workspaces) — monorepo

@@ -6,6 +6,5 @@
       "@courses/ui": ["../../packages/course-ui/src/index.ts"],
       "@courses/ui/*": ["../../packages/course-ui/src/*"]
     }
-  },
-  "include": ["src", "../../packages/course-ui/src/virtual.d.ts"]
+  }
 }
